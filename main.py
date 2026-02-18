@@ -17,7 +17,6 @@ from automation.store_builder import get_store_builder
 from automation.product_research import get_product_research
 from automation.pricing_engine import get_pricing_engine
 from automation.fulfillment_monitor import get_fulfillment_monitor
-from automation.scheduler import get_scheduler
 from services.ai_service import get_ai_service
 from services.notification_service import get_notification_service
 from config.settings import settings
@@ -66,6 +65,7 @@ async def lifespan(app: FastAPI):
     
     # Start scheduler (optional)
     try:
+        from automation.scheduler import get_scheduler
         scheduler = get_scheduler()
         scheduler.start()
     except Exception as e:
@@ -351,8 +351,12 @@ async def generate_content(request: ContentRequest):
 @app.get("/api/scheduler/jobs")
 async def get_scheduler_jobs():
     """Get scheduled job status"""
-    scheduler = get_scheduler()
-    return {"jobs": scheduler.get_jobs()}
+    try:
+        from automation.scheduler import get_scheduler
+        scheduler = get_scheduler()
+        return {"jobs": scheduler.get_jobs()}
+    except Exception as e:
+        return {"jobs": [], "warning": f"Scheduler unavailable: {e}"}
 
 
 @app.get("/api/stats")
@@ -389,3 +393,4 @@ if __name__ == "__main__":
         reload=settings.system.debug,
         log_level=settings.system.log_level.lower()
     )
+
