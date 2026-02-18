@@ -1,0 +1,16 @@
+# Nixpacks configuration for Railway deployment
+
+[phases.build]
+cmds = [
+    "pip install -r requirements.txt"
+]
+
+[phases.setup]
+nixPkgs = ["python311"]
+
+[start]
+cmd = "python main.py"
+
+[variables]
+PYTHON_VERSION = "3.11.0"
+SYSTEM_DATABASE_URL = "sqlite:///app/data/dropshipping_ai.db"

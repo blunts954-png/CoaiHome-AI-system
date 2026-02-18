@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing - AI Dropshipping{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>💰 Pending Price Changes</h2>
+        <button class="btn btn-primary btn-sm" onclick="loadPendingPricing()">Refresh</button>
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Current Price</th>
+                    <th>Suggested Price</th>
+                    <th>Change</th>
+                    <th>AI Confidence</th>
+                    <th>Reasoning</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="pending-pricing-table">
+                <tr><td colspan="7">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>⚙️ Pricing Rules</h2>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+            <div class="form-group">
+                <label>Base Markup Multiplier</label>
+                <input type="number" class="form-control" value="2.5" step="0.1" disabled>
+                <small style="color: #666;">Cost × Multiplier = Base Price</small>
+            </div>
+            <div class="form-group">
+                <label>Minimum Profit Margin (%)</label>
+                <input type="number" class="form-control" value="30" disabled>
+            </div>
+            <div class="form-group">
+                <label>Max Daily Price Change (%)</label>
+                <input type="number" class="form-control" value="10" disabled>
+            </div>
+            <div class="form-group">
+                <label>Price Rounding</label>
+                <input type="number" class="form-control" value="0.99" step="0.01" disabled>
+            </div>
+        </div>
+        <p style="margin-top: 1rem; color: #666; font-size: 0.875rem;">
+            <i>Note: Pricing rules are configured in settings and applied automatically by the AI.</i>
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>🤖 Run Manual Optimization</h2>
+    </div>
+    <div class="card-body">
+        <p style="margin-bottom: 1rem;">Trigger the AI pricing engine to analyze all products and suggest optimizations.</p>
+        <button class="btn btn-primary" onclick="runOptimization()">Run Pricing Optimization</button>
+        <div id="optimization-result" style="margin-top: 1rem;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadPendingPricing() {
+    try {
+        const response = await fetch('/api/pricing/pending');
+        const data = await response.json();
+        const tbody = document.getElementById('pending-pricing-table');
+        
+        if (data.price_changes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">No pending price changes</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = data.price_changes.map(p => {
+            const changeClass = p.change_percent > 0 ? 'positive' : 'negative';
+            const changeSymbol = p.change_percent > 0 ? '+' : '';
+            return `
+            <tr>
+                <td>${p.product_title}</td>
+                <td>$${p.old_price?.toFixed(2)}</td>
+                <td>$${p.suggested_price?.toFixed(2)}</td>
+                <td style="color: ${p.change_percent > 0 ? '#059669' : '#dc2626'}">${changeSymbol}${p.change_percent?.toFixed(1)}%</td>
+                <td>${(p.confidence_score * 100)?.toFixed(0)}%</td>
+                <td style="max-width: 300px; font-size: 0.8rem;">${p.ai_reasoning}</td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="approvePrice(${p.id})">Approve</button>
+                    <button class="btn btn-danger btn-sm" onclick="rejectPrice(${p.id})">Reject</button>
+                </td>
+            </tr>
+        `}).join('');
+    } catch (e) {
+        console.error('Failed to load pending pricing:', e);
+    }
+}
+
+async function approvePrice(id) {
+    if (!confirm('Approve this price change?')) return;
+    try {
+        const response = await fetch(`/api/pricing/${id}/approve`, { method: 'POST' });
+        const data = await response.json();
+        if (data.status === 'success') {
+            alert('Price change approved!');
+            loadPendingPricing();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (e) {
+        alert('Failed to approve: ' + e.message);
+    }
+}
+
+async function rejectPrice(id) {
+    if (!confirm('Reject this price change?')) return;
+    try {
+        await fetch(`/api/pricing/${id}/reject`, { method: 'POST' });
+        loadPendingPricing();
+    } catch (e) {
+        alert('Failed to reject: ' + e.message);
+    }
+}
+
+async function runOptimization() {
+    const resultDiv = document.getElementById('optimization-result');
+    resultDiv.innerHTML = '<p>Running optimization...</p>';
+    
+    try {
+        const response = await fetch('/api/pricing/optimize', { method: 'POST' });
+        const data = await response.json();
+        
+        resultDiv.innerHTML = `
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1rem; border-radius: 4px;">
+                <h4>Optimization Complete</h4>
+                <ul style="margin-top: 0.5rem;">
+                    <li>Products Analyzed: ${data.products_analyzed}</li>
+                    <li>Suggestions Generated: ${data.suggestions_generated}</li>
+                    <li>Applied: ${data.applied}</li>
+                    <li>Pending Approval: ${data.pending_approval}</li>
+                </ul>
+            </div>
+        `;
+        loadPendingPricing();
+    } catch (e) {
+        resultDiv.innerHTML = `<p style="color: #dc2626;">Failed: ${e.message}</p>`;
+    }
+}
+
+// Initialize
+loadPendingPricing();
+</script>
+{% endblock %}

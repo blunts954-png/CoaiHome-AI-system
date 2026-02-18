@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Products - AI Dropshipping{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>⏳ Pending Approval</h2>
+        <button class="btn btn-primary btn-sm" onclick="loadPending()">Refresh</button>
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Supplier</th>
+                    <th>Cost</th>
+                    <th>Suggested Price</th>
+                    <th>AI Confidence</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="pending-table">
+                <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>📦 All Products</h2>
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Price</th>
+                    <th>Margin %</th>
+                    <th>Stock</th>
+                </tr>
+            </thead>
+            <tbody id="products-table">
+                <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>🔍 Research History</h2>
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Niche</th>
+                    <th>Status</th>
+                    <th>Found</th>
+                    <th>Selected</th>
+                    <th>Imported</th>
+                </tr>
+            </thead>
+            <tbody id="research-table">
+                <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadPending() {
+    try {
+        const response = await fetch('/api/products/pending');
+        const data = await response.json();
+        const tbody = document.getElementById('pending-table');
+        
+        if (data.products.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #666;">No pending products</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = data.products.map(p => `
+            <tr>
+                <td>${p.title}</td>
+                <td>${p.supplier_name || 'N/A'}</td>
+                <td>$${p.cost_price?.toFixed(2) || '0.00'}</td>
+                <td>$${p.suggested_price?.toFixed(2) || '0.00'}</td>
+                <td>${(p.ai_confidence * 100)?.toFixed(0) || 0}%</td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="approveProduct(${p.id})">Approve</button>
+                    <button class="btn btn-danger btn-sm" onclick="rejectProduct(${p.id})">Reject</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        console.error('Failed to load pending products:', e);
+    }
+}
+
+async function approveProduct(id) {
+    if (!confirm('Approve this product for import?')) return;
+    try {
+        const response = await fetch(`/api/products/${id}/approve`, { method: 'POST' });
+        const data = await response.json();
+        if (data.status === 'success') {
+            alert('Product approved!');
+            loadPending();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (e) {
+        alert('Failed to approve: ' + e.message);
+    }
+}
+
+async function rejectProduct(id) {
+    if (!confirm('Reject this product?')) return;
+    try {
+        await fetch(`/api/products/${id}/reject`, { method: 'POST' });
+        loadPending();
+    } catch (e) {
+        alert('Failed to reject: ' + e.message);
+    }
+}
+
+async function loadResearchHistory() {
+    try {
+        const response = await fetch('/api/research/jobs');
+        const data = await response.json();
+        const tbody = document.getElementById('research-table');
+        
+        tbody.innerHTML = data.jobs.map(j => `
+            <tr>
+                <td>${new Date(j.created_at).toLocaleString()}</td>
+                <td>${j.niche}</td>
+                <td><span class="badge badge-${j.status === 'completed' ? 'approved' : j.status === 'failed' ? 'error' : 'pending'}">${j.status}</span></td>
+                <td>${j.products_found}</td>
+                <td>${j.products_selected}</td>
+                <td>${j.products_imported}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        console.error('Failed to load research history:', e);
+    }
+}
+
+// Initialize
+loadPending();
+loadResearchHistory();
+</script>
+{% endblock %}

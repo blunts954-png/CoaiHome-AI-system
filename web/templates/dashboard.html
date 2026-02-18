@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>Active Products</h3>
+        <div class="value" id="active-products">-</div>
+    </div>
+    <div class="stat-card">
+        <h3>Pending Approval</h3>
+        <div class="value" id="pending-products">-</div>
+    </div>
+    <div class="stat-card">
+        <h3>Price Changes</h3>
+        <div class="value" id="pending-pricing">-</div>
+    </div>
+    <div class="stat-card">
+        <h3>Open Exceptions</h3>
+        <div class="value" id="open-exceptions">-</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <h2>🚀 Quick Actions</h2>
+        </div>
+        <div class="card-body">
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <button class="btn btn-primary" onclick="runResearch()">
+                    🔍 Run Product Research
+                </button>
+                <button class="btn btn-primary" onclick="runPricing()">
+                    💰 Run Pricing Optimization
+                </button>
+                <button class="btn btn-primary" onclick="syncInventory()">
+                    🔄 Sync Inventory
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h2>🛠️ Create New Store</h2>
+        </div>
+        <div class="card-body">
+            <form id="create-store-form" onsubmit="createStore(event)">
+                <div class="form-group">
+                    <label>Niche</label>
+                    <input type="text" class="form-control" name="niche" placeholder="e.g., home decor" required>
+                </div>
+                <div class="form-group">
+                    <label>Brand Name</label>
+                    <input type="text" class="form-control" name="brand_name" placeholder="Your Store Name" required>
+                </div>
+                <div class="form-group">
+                    <label>Target Country</label>
+                    <select class="form-control" name="target_country">
+                        <option value="US">United States</option>
+                        <option value="UK">United Kingdom</option>
+                        <option value="CA">Canada</option>
+                        <option value="AU">Australia</option>
+                        <option value="EU">Europe</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Brand Tone</label>
+                    <select class="form-control" name="brand_tone">
+                        <option value="professional">Professional</option>
+                        <option value="casual">Casual</option>
+                        <option value="luxury">Luxury</option>
+                        <option value="playful">Playful</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-success">Create AI Store</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>📋 Scheduled Jobs</h2>
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Job Name</th>
+                    <th>Next Run</th>
+                    <th>Schedule</th>
+                </tr>
+            </thead>
+            <tbody id="jobs-table">
+                <tr><td colspan="3">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>📝 System Log</h2>
+    </div>
+    <div class="card-body">
+        <div id="system-log" style="font-family: monospace; font-size: 0.8rem; max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 1rem; border-radius: 4px;">
+            <div>System initialized...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Load stats on page load
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats');
+        const data = await response.json();
+        document.getElementById('active-products').textContent = data.active_products;
+        document.getElementById('pending-products').textContent = data.pending_products;
+        document.getElementById('pending-pricing').textContent = data.pending_price_changes;
+        document.getElementById('open-exceptions').textContent = data.open_exceptions;
+    } catch (e) {
+        console.error('Failed to load stats:', e);
+    }
+}
+
+// Load scheduled jobs
+async function loadJobs() {
+    try {
+        const response = await fetch('/api/scheduler/jobs');
+        const data = await response.json();
+        const tbody = document.getElementById('jobs-table');
+        tbody.innerHTML = data.jobs.map(job => `
+            <tr>
+                <td>${job.name}</td>
+                <td>${job.next_run ? new Date(job.next_run).toLocaleString() : 'N/A'}</td>
+                <td>${job.trigger}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        console.error('Failed to load jobs:', e);
+    }
+}
+
+// Action functions
+async function runResearch() {
+    log('Starting product research...');
+    try {
+        const response = await fetch('/api/research/run?store_id=1', { method: 'POST' });
+        const data = await response.json();
+        log(`Research completed: ${data.products_selected || 0} products selected`);
+        loadStats();
+    } catch (e) {
+        log('Research failed: ' + e.message);
+    }
+}
+
+async function runPricing() {
+    log('Starting pricing optimization...');
+    try {
+        const response = await fetch('/api/pricing/optimize', { method: 'POST' });
+        const data = await response.json();
+        log(`Pricing optimization completed: ${data.suggestions_generated || 0} suggestions`);
+        loadStats();
+    } catch (e) {
+        log('Pricing optimization failed: ' + e.message);
+    }
+}
+
+async function syncInventory() {
+    log('Syncing inventory...');
+    try {
+        const response = await fetch('/api/inventory/sync', { method: 'POST' });
+        const data = await response.json();
+        log(`Inventory sync completed: ${data.stock_updates || 0} updates`);
+    } catch (e) {
+        log('Inventory sync failed: ' + e.message);
+    }
+}
+
+async function createStore(event) {
+    event.preventDefault();
+    const form = event.target;
+    const data = {
+        niche: form.niche.value,
+        brand_name: form.brand_name.value,
+        target_country: form.target_country.value,
+        brand_tone: form.brand_tone.value,
+        primary_color: '#000000',
+        secondary_color: '#ffffff'
+    };
+    
+    log('Creating new AI store...');
+    try {
+        const response = await fetch('/api/stores/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.status === 'completed') {
+            log(`Store created: ${result.shopify_domain}`);
+            form.reset();
+        } else {
+            log('Store creation in progress...');
+        }
+        loadStats();
+    } catch (e) {
+        log('Store creation failed: ' + e.message);
+    }
+}
+
+function log(message) {
+    const logDiv = document.getElementById('system-log');
+    const time = new Date().toLocaleTimeString();
+    logDiv.innerHTML += `<div>[${time}] ${message}</div>`;
+    logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+// Initialize
+loadStats();
+loadJobs();
+setInterval(loadStats, 30000); // Refresh every 30 seconds
+</script>
+{% endblock %}

@@ -1,0 +1,24 @@
+# Render.com deployment configuration
+services:
+  - type: web
+    name: dropshipping-ai-automation
+    env: python
+    plan: starter  # Use 'starter' ($7/mo) or 'standard' for production
+    buildCommand: |
+      pip install -r requirements.txt
+      python -c "from models.database import init_db; init_db()"
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SYSTEM_DEBUG
+        value: "false"
+      # Add your secrets in Render dashboard:
+      # SHOPIFY_ACCESS_TOKEN
+      # AUTODS_API_KEY
+      # AI_API_KEY
+      # etc.
+    disk:
+      name: data
+      mountPath: /app/data
+      sizeGB: 1

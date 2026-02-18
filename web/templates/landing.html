@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Dropshipping Automation - Run Your Store on Autopilot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 100px 0;
+            text-align: center;
+        }
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            font-weight: 800;
+        }
+        .hero p {
+            font-size: 1.25rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 16px 40px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+        }
+        
+        /* Features */
+        .features {
+            padding: 80px 0;
+            background: #f8f9fa;
+        }
+        .features h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+        }
+        .feature-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+        }
+        .feature-card p {
+            color: #666;
+        }
+        
+        /* How It Works */
+        .how-it-works {
+            padding: 80px 0;
+        }
+        .how-it-works h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+        }
+        .steps {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 30px;
+        }
+        .step {
+            flex: 1;
+            min-width: 250px;
+            text-align: center;
+        }
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            background: #667eea;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 50%;
+            margin-bottom: 20px;
+        }
+        .step h3 {
+            margin-bottom: 10px;
+        }
+        
+        /* Pricing */
+        .pricing {
+            padding: 80px 0;
+            background: #f8f9fa;
+        }
+        .pricing h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+        }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .pricing-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .pricing-card.featured {
+            border: 2px solid #667eea;
+            transform: scale(1.05);
+        }
+        .pricing-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+        .price {
+            font-size: 3rem;
+            font-weight: 800;
+            color: #667eea;
+            margin: 20px 0;
+        }
+        .price span {
+            font-size: 1rem;
+            color: #666;
+        }
+        .pricing-card ul {
+            list-style: none;
+            text-align: left;
+            margin: 30px 0;
+        }
+        .pricing-card li {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .pricing-card li:before {
+            content: "✓ ";
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        /* Footer */
+        footer {
+            background: #1a1a2e;
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero -->
+    <section class="hero">
+        <div class="container">
+            <h1>AI Runs Your Dropshipping Store<br>24/7 on Autopilot</h1>
+            <p>Automated product research, AI pricing optimization, inventory sync, and fulfillment monitoring. Set it up once, let AI handle the rest.</p>
+            <a href="#pricing" class="cta-button">Start Free Trial</a>
+            <p style="margin-top: 20px; font-size: 0.9rem; opacity: 0.8;">No credit card required • 14-day free trial</p>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+        <div class="container">
+            <h2>What The AI Handles For You</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <h3>AI Product Research</h3>
+                    <p>Discovers trending products daily, analyzes profit potential, and automatically imports winners to your store.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💰</div>
+                    <h3>Smart Pricing</h3>
+                    <p>Optimizes prices based on performance data, competitor analysis, and profit margins. Updates automatically.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📦</div>
+                    <h3>Inventory Sync</h3>
+                    <p>Monitors stock levels 24/7, pauses out-of-stock products, and alerts you to supplier issues instantly.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Auto Fulfillment</h3>
+                    <p>Orders flow directly to suppliers. Tracking syncs back to customers. You just handle exceptions.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">✍️</div>
+                    <h3>AI Content</h3>
+                    <p>Generates SEO-optimized product descriptions, email templates, and support responses automatically.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Dashboard & Alerts</h3>
+                    <p>Monitor everything from one place. Get Slack/email alerts for exceptions that need your attention.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+        <div class="container">
+            <h2>How It Works</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Connect Your Store</h3>
+                    <p>Link your Shopify store and AutoDS account in 2 minutes</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Set Your Rules</h3>
+                    <p>Define profit margins, shipping preferences, and approval gates</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>AI Takes Over</h3>
+                    <p>The system runs 24/7. You approve the AI's decisions via dashboard</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Scale & Optimize</h3>
+                    <p>Review analytics, adjust rules, and watch your store grow</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="container">
+            <h2>Simple Pricing</h2>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>Starter</h3>
+                    <div class="price">$29<span>/month</span></div>
+                    <ul>
+                        <li>1 Shopify store</li>
+                        <li>AI product research (5/day)</li>
+                        <li>Automated pricing</li>
+                        <li>Inventory sync</li>
+                        <li>Email support</li>
+                    </ul>
+                    <a href="#" class="cta-button" style="padding: 12px 30px; font-size: 1rem;">Get Started</a>
+                </div>
+                <div class="pricing-card featured">
+                    <h3>Pro</h3>
+                    <div class="price">$79<span>/month</span></div>
+                    <ul>
+                        <li>3 Shopify stores</li>
+                        <li>Unlimited AI research</li>
+                        <li>Advanced pricing rules</li>
+                        <li>Slack notifications</li>
+                        <li>AI content generation</li>
+                        <li>Priority support</li>
+                    </ul>
+                    <a href="#" class="cta-button" style="padding: 12px 30px; font-size: 1rem;">Get Started</a>
+                </div>
+                <div class="pricing-card">
+                    <h3>Agency</h3>
+                    <div class="price">$199<span>/month</span></div>
+                    <ul>
+                        <li>Unlimited stores</li>
+                        <li>White-label option</li>
+                        <li>API access</li>
+                        <li>Custom integrations</li>
+                        <li>Dedicated support</li>
+                    </ul>
+                    <a href="#" class="cta-button" style="padding: 12px 30px; font-size: 1rem;">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="hero" style="padding: 80px 0;">
+        <div class="container">
+            <h2 style="font-size: 2.5rem; margin-bottom: 20px;">Ready to Automate?</h2>
+            <p style="margin-bottom: 40px;">Join dropshippers who let AI handle the grunt work while they focus on growth.</p>
+            <a href="#pricing" class="cta-button">Start Free Trial</a>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 AI Dropshipping Automation. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

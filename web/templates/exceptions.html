@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Exceptions - AI Dropshipping{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>🚨 Open Exceptions</h2>
+        <button class="btn btn-primary btn-sm" onclick="loadExceptions()">Refresh</button>
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Type</th>
+                    <th>Error</th>
+                    <th>Customer</th>
+                    <th>Amount</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="exceptions-table">
+                <tr><td colspan="7">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>📊 Exception Statistics</h2>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Open</h3>
+                <div class="value" id="stat-open">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Resolved Today</h3>
+                <div class="value" id="stat-resolved">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Most Common</h3>
+                <div class="value" style="font-size: 1rem;" id="stat-common">-</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>🔧 Manual Tools</h2>
+    </div>
+    <div class="card-body">
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="checkFulfillment()">
+                Check Fulfillment Status
+            </button>
+            <button class="btn btn-primary" onclick="syncInventory()">
+                Force Inventory Sync
+            </button>
+        </div>
+        <div id="tool-result" style="margin-top: 1rem;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadExceptions() {
+    try {
+        const response = await fetch('/api/exceptions');
+        const data = await response.json();
+        const tbody = document.getElementById('exceptions-table');
+        
+        if (data.exceptions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">No open exceptions - All systems operational! 🎉</td></tr>';
+            document.getElementById('stat-open').textContent = '0';
+            return;
+        }
+        
+        document.getElementById('stat-open').textContent = data.exceptions.length;
+        
+        // Count exception types
+        const types = {};
+        data.exceptions.forEach(e => {
+            types[e.exception_type] = (types[e.exception_type] || 0) + 1;
+        });
+        const mostCommon = Object.entries(types).sort((a, b) => b[1] - a[1])[0];
+        document.getElementById('stat-common').textContent = mostCommon ? mostCommon[0] : 'N/A';
+        
+        tbody.innerHTML = data.exceptions.map(e => `
+            <tr>
+                <td><code>${e.shopify_order_id || e.id}</code></td>
+                <td><span class="badge badge-error">${e.exception_type}</span></td>
+                <td style="max-width: 300px; font-size: 0.8rem;">${e.error_message}</td>
+                <td>${e.customer_email || 'N/A'}</td>
+                <td>$${e.total_amount?.toFixed(2) || '0.00'}</td>
+                <td>${new Date(e.created_at).toLocaleString()}</td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="resolveException(${e.id})">Resolve</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        console.error('Failed to load exceptions:', e);
+    }
+}
+
+async function resolveException(id) {
+    const resolution = prompt('Enter resolution notes:');
+    if (!resolution) return;
+    
+    try {
+        const response = await fetch(`/api/exceptions/${id}/resolve`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                resolution: resolution,
+                resolved_by: 'manual'
+            })
+        });
+        const data = await response.json();
+        if (data.status === 'success') {
+            alert('Exception resolved!');
+            loadExceptions();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (e) {
+        alert('Failed to resolve: ' + e.message);
+    }
+}
+
+async function checkFulfillment() {
+    const resultDiv = document.getElementById('tool-result');
+    resultDiv.innerHTML = '<p>Checking fulfillment status...</p>';
+    
+    try {
+        const response = await fetch('/api/exceptions');
+        const data = await response.json();
+        resultDiv.innerHTML = `<p>Found ${data.exceptions.length} open exceptions.</p>`;
+    } catch (e) {
+        resultDiv.innerHTML = `<p style="color: #dc2626;">Failed: ${e.message}</p>`;
+    }
+}
+
+async function syncInventory() {
+    const resultDiv = document.getElementById('tool-result');
+    resultDiv.innerHTML = '<p>Syncing inventory...</p>';
+    
+    try {
+        const response = await fetch('/api/inventory/sync', { method: 'POST' });
+        const data = await response.json();
+        resultDiv.innerHTML = `
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1rem; border-radius: 4px;">
+                <p>Inventory sync complete!</p>
+                <ul>
+                    <li>Products checked: ${data.products_checked}</li>
+                    <li>Stock updates: ${data.stock_updates}</li>
+                    <li>Stockouts detected: ${data.stockouts_detected}</li>
+                </ul>
+            </div>
+        `;
+    } catch (e) {
+        resultDiv.innerHTML = `<p style="color: #dc2626;">Failed: ${e.message}</p>`;
+    }
+}
+
+// Initialize
+loadExceptions();
+setInterval(loadExceptions, 60000); // Refresh every minute
+</script>
+{% endblock %}
