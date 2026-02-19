@@ -661,6 +661,215 @@ async def generate_content(request: ContentRequest):
     return result
 
 
+# ============ API Routes - TikTok Content ============
+
+class TikTokScriptRequest(BaseModel):
+    product_id: int
+    content_type: str = "product_demo"  # product_demo, before_after, tips, story, trending
+    trending_sound: Optional[str] = None
+
+
+@app.post("/api/tiktok/generate-script")
+async def generate_tiktok_script(request: TikTokScriptRequest):
+    """Generate TikTok video script for a product"""
+    from services.ai_service import get_ai_service
+    from models.database import SessionLocal, Product
+    
+    db = SessionLocal()
+    product = db.query(Product).filter(Product.id == request.product_id).first()
+    db.close()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    ai = get_ai_service()
+    
+    product_data = {
+        "id": product.id,
+        "title": product.title,
+        "description": product.description,
+        "price": product.selling_price,
+        "category": "home organization",  # You can add category field to Product
+        "supplier": product.supplier_name
+    }
+    
+    script = await ai.generate_tiktok_script(
+        product_data,
+        content_type=request.content_type,
+        trending_sound=request.trending_sound
+    )
+    
+    return {
+        "product_id": request.product_id,
+        "product_title": product.title,
+        "script": script
+    }
+
+
+@app.get("/api/tiktok/content-calendar")
+async def get_tiktok_calendar(days: int = 30, store_id: Optional[int] = None):
+    """Generate TikTok content calendar"""
+    from services.ai_service import get_ai_service
+    from models.database import SessionLocal, Product
+    
+    db = SessionLocal()
+    query = db.query(Product).filter(Product.status == "active")
+    if store_id:
+        query = query.filter(Product.store_id == store_id)
+    products = query.limit(10).all()
+    db.close()
+    
+    products_data = [
+        {
+            "id": p.id,
+            "title": p.title,
+            "price": p.selling_price,
+            "description": p.description[:100] if p.description else ""
+        }
+        for p in products
+    ]
+    
+    ai = get_ai_service()
+    calendar = await ai.generate_tiktok_calendar(products_data, days=days)
+    
+    return {
+        "days": days,
+        "products_available": len(products_data),
+        "calendar": calendar
+    }
+
+
+@app.get("/api/tiktok/trending-hashtags")
+async def get_trending_hashtags(niche: str = "home organization"):
+    """Get trending hashtags for your niche"""
+    # These are current trending hashtags for home/organization niche
+    # In production, you could scrape or use an API for real-time trends
+    hashtags = {
+        "always_trending": [
+            "#homeorganization",
+            "#organization", 
+            "#organizing",
+            "#homeorganizing",
+            "#organizationhacks",
+            "#declutter",
+            "#tidyingup",
+            "#cleanhome",
+            "#organizedlife"
+        ],
+        "trending_now": [
+            "#satisfying",
+            "#asmr",
+            "#restock",
+            "#cleantok",
+            "#organizationtiktok",
+            "#homehacks",
+            "#smallbusiness",
+            "#tiktokmademebuyit"
+        ],
+        "niche_specific": {
+            "home organization": [
+                "#kitchenorganization",
+                "#bathroomorganization", 
+                "#bedroomorganization",
+                "#closetorganization",
+                "#drawerorganization",
+                "#fridgeorganization",
+                "#pantryorganization",
+                "#under Sink",
+                "#deskorganization"
+            ],
+            "cleaning": [
+                "#cleaninghacks",
+                "#cleaningtips",
+                "#speedclean",
+                "#deepclean",
+                "#cleanwithme"
+            ]
+        }
+    }
+    
+    return {
+        "niche": niche,
+        "hashtags": hashtags,
+        "recommended_mix": {
+            "broad_reach": ["#homeorganization", "#organization", "#satisfying"],
+            "niche_targeted": ["#kitchenorganization", "#organizing"],
+            "trending": ["#tiktokmademebuyit", "#restock"],
+            "branded": ["#coaihome"]  # Replace with your brand
+        },
+        "usage_tips": [
+            "Use 5-7 hashtags per video",
+            "Mix broad + niche + trending",
+            "Add 1 branded hashtag",
+            "Put in caption, not comments"
+        ]
+    }
+
+
+# ============ API Routes - Store Redesign ============
+
+class RedesignRequest(BaseModel):
+    store_id: int
+    new_theme: Optional[str] = None  # minimal, bold, luxury, cozy, modern
+    goals: List[str] = []  # higher_conversion, better_branding, modern_look
+
+
+@app.post("/api/store/redesign")
+async def generate_store_redesign(request: RedesignRequest):
+    """Generate AI store redesign recommendations"""
+    from services.ai_service import get_ai_service
+    from models.database import SessionLocal, Store, Product
+    
+    db = SessionLocal()
+    store = db.query(Store).filter(Store.id == request.store_id).first()
+    products = db.query(Product).filter(
+        Product.store_id == request.store_id,
+        Product.status == "active"
+    ).limit(10).all()
+    db.close()
+    
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    
+    ai = get_ai_service()
+    
+    current_store_data = {
+        "store_id": store.id,
+        "brand_name": store.brand_name,
+        "niche": store.niche,
+        "current_colors": {
+            "primary": store.primary_color,
+            "secondary": store.secondary_color
+        },
+        "brand_tone": store.brand_tone,
+        "product_count": len(products),
+        "top_products": [
+            {"title": p.title, "price": p.selling_price} for p in products[:5]
+        ]
+    }
+    
+    redesign = await ai.generate_store_redesign(
+        current_store_data,
+        new_theme=request.new_theme
+    )
+    
+    return {
+        "store_id": request.store_id,
+        "current_brand": store.brand_name,
+        "redesign": redesign
+    }
+
+
+@app.post("/api/store/update-branding")
+async def update_store_branding(store_id: int, branding: Dict[str, Any]):
+    """Update store branding colors and tone"""
+    from automation.store_builder import get_store_builder
+    
+    builder = get_store_builder()
+    result = await builder.update_store_branding(store_id, branding)
+    return result
+
+
 # ============ API Routes - System ============
 
 @app.get("/api/scheduler/jobs")

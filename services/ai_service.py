@@ -506,6 +506,228 @@ Return JSON:
                 "suggested_action": "escalate"
             }
     
+    # ============ TikTok Content Generation ============
+    
+    async def generate_tiktok_script(self, product: Dict, content_type: str = "product_demo",
+                                    trending_sound: Optional[str] = None) -> Dict:
+        """
+        Generate TikTok video script for a product
+        
+        Args:
+            product: Product info
+            content_type: product_demo, before_after, tips, story, trending
+            trending_sound: Optional trending sound to use
+        
+        Returns:
+            {
+                "hook": "first 3 seconds",
+                "script": "full script",
+                "visuals": ["scene descriptions"],
+                "text_overlay": ["on-screen text"],
+                "hashtags": ["tags"],
+                "duration_seconds": 15-60,
+                "cta": "call to action"
+            }
+        """
+        prompt = f"""Create a viral TikTok video script for this dropshipping product:
+
+PRODUCT:
+{json.dumps(product, indent=2)}
+
+CONTENT TYPE: {content_type}
+TRENDING SOUND: {trending_sound or "Use trending organization sound"}
+
+TikTok Best Practices:
+- Hook in first 3 seconds
+- Keep it authentic, not salesy
+- Show transformation/problem-solution
+- Use trending audio references
+- Include text overlays for accessibility
+- End with clear CTA
+- 15-30 seconds optimal
+
+Generate:
+1. Hook (attention grabber for first 3 sec)
+2. Full script (what to say/do)
+3. Visual directions (scene by scene)
+4. Text overlays to add
+5. Recommended hashtags
+6. Call to action
+
+Return JSON:
+{{
+    "hook": "...",
+    "script": "...",
+    "visuals": ["scene 1", "scene 2", "scene 3"],
+    "text_overlay": ["text 1", "text 2"],
+    "hashtags": ["#tag1", "#tag2"],
+    "duration_seconds": 30,
+    "cta": "...",
+    "audio_suggestion": "..."
+}}
+"""
+        
+        messages = [
+            {"role": "system", "content": "You are a TikTok content creator who specializes in viral product videos. Create engaging, authentic content that doesn't feel like an ad."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        result = await self._call_llm(messages)
+        
+        try:
+            script = json.loads(result["content"])
+            self._log_ai_action(
+                action_type="tiktok_script_generation",
+                entity_type="product",
+                entity_id=product.get("id", "unknown"),
+                prompt=prompt,
+                response=json.dumps(script),
+                status="success",
+                extra_data={"content_type": content_type}
+            )
+            return script
+        except:
+            return {
+                "hook": f"Stop struggling with {product.get('category', 'mess')}!",
+                "script": "Show the problem, then reveal the solution with this product",
+                "visuals": ["Show messy situation", "Introduce product", "Show result"],
+                "text_overlay": ["POV: You found the solution", "Link in bio"],
+                "hashtags": ["#homeorganization", "#organization", "#satisfying"],
+                "duration_seconds": 30,
+                "cta": "Get yours - link in bio!",
+                "audio_suggestion": "Trending organization ASMR sound"
+            }
+    
+    async def generate_tiktok_calendar(self, products: List[Dict], days: int = 30) -> Dict:
+        """Generate a content calendar with TikTok video ideas"""
+        prompt = f"""Create a {days}-day TikTok content calendar for a home organization store.
+
+PRODUCTS AVAILABLE:
+{json.dumps(products, indent=2)}
+
+CONTENT MIX:
+- 40% Product demos/transformations
+- 20% Tips/educational
+- 15% Behind the scenes/story
+- 15% Trending sounds/challenges
+- 10% Engagement/community
+
+For each day include:
+- Content type
+- Product to feature (if any)
+- Hook/text overlay
+- Hashtag strategy
+
+Return JSON:
+{{
+    "calendar": [
+        {{
+            "day": 1,
+            "content_type": "product_demo",
+            "product_id": "...",
+            "title": "...",
+            "hook": "...",
+            "hashtags": ["..."],
+            "filming_time": "10 min"
+        }}
+    ],
+    "weekly_themes": ["..."]
+}}
+"""
+        
+        messages = [
+            {"role": "system", "content": "You are a social media strategist specializing in TikTok for e-commerce."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        result = await self._call_llm(messages)
+        
+        try:
+            return json.loads(result["content"])
+        except:
+            return {"calendar": [], "weekly_themes": ["Product showcases", "Tips & tricks", "Behind the scenes", "Trending content"]}
+    
+    # ============ Store Redesign ============
+    
+    async def generate_store_redesign(self, current_store: Dict, 
+                                     new_theme: Optional[str] = None) -> Dict:
+        """
+        Generate store redesign recommendations
+        
+        Args:
+            current_store: Current store info, products, performance
+            new_theme: Optional theme preference (minimal, bold, luxury, etc.)
+        
+        Returns:
+            {
+                "theme_recommendation": "...",
+                "color_scheme": {"primary": "#...", "secondary": "#..."},
+                "homepage_sections": [...],
+                "product_page_improvements": [...],
+                "new_content": {"about_us": "...", "hero": "..."},
+                "implementation_steps": [...]
+            }
+        """
+        prompt = f"""Analyze this store and provide a complete redesign strategy:
+
+CURRENT STORE:
+{json.dumps(current_store, indent=2)}
+
+THEME PREFERENCE: {new_theme or "modern, clean, high-converting"}
+
+Provide:
+1. Theme/colors recommendations
+2. Homepage structure (sections in order)
+3. Product page improvements
+4. New copy/content suggestions
+5. Implementation priority
+
+Return JSON:
+{{
+    "theme_recommendation": "...",
+    "color_scheme": {{"primary": "#...", "secondary": "#...", "accent": "#..."}},
+    "typography": {{"heading": "...", "body": "..."}},
+    "homepage_sections": ["hero", "featured", "..."],
+    "product_page_improvements": ["..."],
+    "new_content": {{
+        "hero_headline": "...",
+        "hero_subheadline": "...",
+        "about_us": "..."
+    }},
+    "shopify_theme_recommendations": ["Dawn", "Refresh", "..."],
+    "implementation_steps": ["1. ...", "2. ..."]
+}}
+"""
+        
+        messages = [
+            {"role": "system", "content": "You are a Shopify design expert who specializes in high-converting dropshipping stores."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        result = await self._call_llm(messages)
+        
+        try:
+            redesign = json.loads(result["content"])
+            self._log_ai_action(
+                action_type="store_redesign",
+                entity_type="store",
+                entity_id=current_store.get("store_id", "unknown"),
+                prompt=prompt,
+                response=json.dumps(redesign),
+                status="success"
+            )
+            return redesign
+        except:
+            return {
+                "theme_recommendation": "Clean, minimal organization theme",
+                "color_scheme": {"primary": "#2C3E50", "secondary": "#ECF0F1", "accent": "#E74C3C"},
+                "homepage_sections": ["Hero", "Featured Products", "Benefits", "Social Proof", "FAQ"],
+                "product_page_improvements": ["Better images", "Video demo", "Trust badges"],
+                "new_content": {},
+                "shopify_theme_recommendations": ["Dawn", "Refresh", "Sense"],
+                "implementation_steps": ["Backup current theme", "Install new theme", "Customize colors", "Update content"]
+            }
+    
     # ============ Supplier & Risk Analysis ============
     
     async def analyze_supplier_risk(self, supplier_data: Dict) -> Dict:
