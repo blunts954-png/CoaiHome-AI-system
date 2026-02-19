@@ -18,6 +18,11 @@ class ShopifyConfig(BaseSettings):
     access_token: str = Field(default="", description="Shopify Admin API access token")
     api_version: str = Field(default="2024-01", description="Shopify API version")
     webhook_secret: str = Field(default="", description="Webhook validation secret")
+    app_url: str = Field(default="", description="Public app URL (e.g., https://your-app.up.railway.app)")
+    api_scopes: str = Field(
+        default="read_products,write_products,read_orders,write_orders,read_inventory,write_inventory",
+        description="Comma-separated Shopify OAuth scopes"
+    )
 
 
 class AutoDSConfig(BaseSettings):

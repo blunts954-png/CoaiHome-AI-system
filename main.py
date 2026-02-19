@@ -5,12 +5,18 @@ FastAPI backend with automated workflows
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from contextlib import asynccontextmanager
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import uvicorn
 import os
+import hashlib
+import hmac
+import re
+import secrets
+from urllib.parse import urlencode
+import httpx
 
 from config.settings import settings
 
@@ -39,6 +45,30 @@ class ExceptionResolution(BaseModel):
 class ContentRequest(BaseModel):
     content_type: str  # product_description, email_template, etc.
     context: Dict[str, Any]
+
+
+SHOPIFY_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$")
+OAUTH_STATE_STORE: Dict[str, str] = {}
+INSTALLED_SHOPS: Dict[str, str] = {}
+
+
+def _is_valid_shop_domain(shop: str) -> bool:
+    return bool(SHOPIFY_DOMAIN_RE.match(shop))
+
+
+def _build_hmac_message(request: Request) -> str:
+    filtered = [(k, v) for k, v in request.query_params.multi_items() if k not in {"hmac", "signature"}]
+    sorted_items = sorted(filtered, key=lambda item: item[0])
+    return "&".join(f"{key}={value}" for key, value in sorted_items)
+
+
+def _verify_shopify_hmac(request: Request, api_secret: str) -> bool:
+    provided_hmac = request.query_params.get("hmac", "")
+    if not provided_hmac:
+        return False
+    message = _build_hmac_message(request)
+    digest = hmac.new(api_secret.encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(digest, provided_hmac)
 
 
 # Lifespan context manager
@@ -115,6 +145,85 @@ async def products_page(request: Request):
 async def pricing_page(request: Request):
     """Pricing management page"""
     return templates.TemplateResponse("pricing.html", {"request": request})
+
+
+# ============ Shopify OAuth ============ 
+
+@app.get("/auth/shopify/install")
+async def shopify_install(shop: str):
+    """Start Shopify OAuth installation flow."""
+    if not settings.shopify.api_key or not settings.shopify.api_secret:
+        raise HTTPException(status_code=500, detail="Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET")
+    if not settings.shopify.app_url:
+        raise HTTPException(status_code=500, detail="Missing SHOPIFY_APP_URL")
+
+    shop = shop.strip().lower()
+    if not _is_valid_shop_domain(shop):
+        raise HTTPException(status_code=400, detail="Invalid shop domain. Use format: store-name.myshopify.com")
+
+    state = secrets.token_urlsafe(24)
+    OAUTH_STATE_STORE[state] = shop
+    callback_url = f"{settings.shopify.app_url.rstrip('/')}/auth/shopify/callback"
+    query = urlencode(
+        {
+            "client_id": settings.shopify.api_key,
+            "scope": settings.shopify.api_scopes,
+            "redirect_uri": callback_url,
+            "state": state
+        }
+    )
+    install_url = f"https://{shop}/admin/oauth/authorize?{query}"
+    return RedirectResponse(url=install_url, status_code=302)
+
+
+@app.get("/auth/shopify/callback")
+async def shopify_callback(request: Request):
+    """Handle Shopify OAuth callback and exchange code for access token."""
+    if not settings.shopify.api_key or not settings.shopify.api_secret:
+        raise HTTPException(status_code=500, detail="Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET")
+
+    shop = request.query_params.get("shop", "").strip().lower()
+    code = request.query_params.get("code", "")
+    state = request.query_params.get("state", "")
+
+    if not shop or not code or not state:
+        raise HTTPException(status_code=400, detail="Missing required OAuth parameters")
+    if not _is_valid_shop_domain(shop):
+        raise HTTPException(status_code=400, detail="Invalid shop domain")
+    if OAUTH_STATE_STORE.pop(state, None) != shop:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    if not _verify_shopify_hmac(request, settings.shopify.api_secret):
+        raise HTTPException(status_code=400, detail="Invalid OAuth HMAC signature")
+
+    token_url = f"https://{shop}/admin/oauth/access_token"
+    payload = {
+        "client_id": settings.shopify.api_key,
+        "client_secret": settings.shopify.api_secret,
+        "code": code
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(token_url, json=payload)
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Token exchange failed: {response.text}")
+
+    access_token = response.json().get("access_token", "")
+    if not access_token:
+        raise HTTPException(status_code=502, detail="Token exchange failed: missing access_token")
+
+    # Runtime-only cache so this process can immediately call Shopify APIs.
+    settings.shopify.shop_url = shop
+    settings.shopify.access_token = access_token
+    INSTALLED_SHOPS[shop] = access_token
+
+    return RedirectResponse(url=f"/dashboard?shop={shop}&installed=1", status_code=302)
+
+
+@app.get("/auth/shopify/status")
+async def shopify_install_status(shop: str):
+    """Check whether this process has an installed token cached for a shop."""
+    shop = shop.strip().lower()
+    return {"shop": shop, "installed": shop in INSTALLED_SHOPS}
 
 
 # ============ API Routes - Store Builder ============
