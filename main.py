@@ -13,12 +13,6 @@ import uvicorn
 import os
 
 from models.database import init_db, SessionLocal, Product, PriceChange, OrderException, Store, ProductResearchJob
-from automation.store_builder import get_store_builder
-from automation.product_research import get_product_research
-from automation.pricing_engine import get_pricing_engine
-from automation.fulfillment_monitor import get_fulfillment_monitor
-from services.ai_service import get_ai_service
-from services.notification_service import get_notification_service
 from config.settings import settings
 
 
@@ -128,6 +122,7 @@ async def pricing_page(request: Request):
 @app.post("/api/stores/create")
 async def create_store(spec: StoreSpec, background_tasks: BackgroundTasks):
     """Create a new AI-built store"""
+    from automation.store_builder import get_store_builder
     builder = get_store_builder()
     
     # Run in background as it takes time
@@ -163,6 +158,7 @@ async def list_stores():
 @app.post("/api/research/run")
 async def run_research(store_id: int, niche: Optional[str] = None):
     """Trigger a product research job"""
+    from automation.product_research import get_product_research
     research = get_product_research()
     result = await research.run_research_job(store_id, niche)
     return result
@@ -224,6 +220,7 @@ async def get_pending_products(store_id: Optional[int] = None):
 @app.post("/api/products/{product_id}/approve")
 async def approve_product(product_id: int):
     """Approve a pending product for import"""
+    from automation.product_research import get_product_research
     research = get_product_research()
     result = await research.approve_pending_product(product_id)
     return result
@@ -232,6 +229,7 @@ async def approve_product(product_id: int):
 @app.post("/api/products/{product_id}/reject")
 async def reject_product(product_id: int, reason: Optional[str] = ""):
     """Reject a pending product"""
+    from automation.product_research import get_product_research
     research = get_product_research()
     result = await research.reject_pending_product(product_id, reason)
     return result
@@ -242,6 +240,7 @@ async def reject_product(product_id: int, reason: Optional[str] = ""):
 @app.post("/api/pricing/optimize")
 async def run_pricing_optimization(store_id: Optional[int] = None):
     """Run AI pricing optimization"""
+    from automation.pricing_engine import get_pricing_engine
     engine = get_pricing_engine()
     result = await engine.run_pricing_optimization(store_id)
     return result
@@ -278,6 +277,7 @@ async def get_pending_price_changes(store_id: Optional[int] = None):
 @app.post("/api/pricing/{price_change_id}/approve")
 async def approve_price_change(price_change_id: int):
     """Approve a pending price change"""
+    from automation.pricing_engine import get_pricing_engine
     engine = get_pricing_engine()
     result = await engine.approve_price_change(price_change_id)
     return result
@@ -286,6 +286,7 @@ async def approve_price_change(price_change_id: int):
 @app.post("/api/pricing/{price_change_id}/reject")
 async def reject_price_change(price_change_id: int):
     """Reject a pending price change"""
+    from automation.pricing_engine import get_pricing_engine
     engine = get_pricing_engine()
     result = await engine.reject_price_change(price_change_id)
     return result
@@ -296,6 +297,7 @@ async def reject_price_change(price_change_id: int):
 @app.get("/api/exceptions")
 async def get_exceptions(status: str = "open"):
     """Get fulfillment exceptions"""
+    from automation.fulfillment_monitor import get_fulfillment_monitor
     monitor = get_fulfillment_monitor()
     exceptions = await monitor.get_exception_queue(status)
     return {"exceptions": exceptions}
@@ -304,6 +306,7 @@ async def get_exceptions(status: str = "open"):
 @app.post("/api/exceptions/{exception_id}/resolve")
 async def resolve_exception(exception_id: int, resolution: ExceptionResolution):
     """Resolve a fulfillment exception"""
+    from automation.fulfillment_monitor import get_fulfillment_monitor
     monitor = get_fulfillment_monitor()
     result = await monitor.resolve_exception(
         exception_id,
@@ -316,6 +319,7 @@ async def resolve_exception(exception_id: int, resolution: ExceptionResolution):
 @app.post("/api/inventory/sync")
 async def sync_inventory(store_id: Optional[int] = None):
     """Manually trigger inventory sync"""
+    from automation.fulfillment_monitor import get_fulfillment_monitor
     monitor = get_fulfillment_monitor()
     result = await monitor.run_inventory_sync(store_id)
     return result
@@ -326,6 +330,7 @@ async def sync_inventory(store_id: Optional[int] = None):
 @app.post("/api/ai/generate-content")
 async def generate_content(request: ContentRequest):
     """Generate AI content (descriptions, emails, etc.)"""
+    from services.ai_service import get_ai_service
     ai = get_ai_service()
     
     if request.content_type == "product_description":
