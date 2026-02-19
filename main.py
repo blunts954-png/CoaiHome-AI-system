@@ -12,7 +12,6 @@ from pydantic import BaseModel
 import uvicorn
 import os
 
-from models.database import init_db, SessionLocal, Product, PriceChange, OrderException, Store, ProductResearchJob
 from config.settings import settings
 
 
@@ -51,6 +50,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     try:
+        from models.database import init_db
         print("🗄️  Initializing database...")
         init_db()
         print("✅ Database ready")
@@ -134,6 +134,7 @@ async def create_store(spec: StoreSpec, background_tasks: BackgroundTasks):
 @app.get("/api/stores")
 async def list_stores():
     """List all stores"""
+    from models.database import SessionLocal, Store
     db = SessionLocal()
     stores = db.query(Store).all()
     db.close()
@@ -167,6 +168,7 @@ async def run_research(store_id: int, niche: Optional[str] = None):
 @app.get("/api/research/jobs")
 async def list_research_jobs(store_id: Optional[int] = None):
     """List product research jobs"""
+    from models.database import SessionLocal, ProductResearchJob
     db = SessionLocal()
     query = db.query(ProductResearchJob)
     if store_id:
@@ -194,6 +196,7 @@ async def list_research_jobs(store_id: Optional[int] = None):
 @app.get("/api/products/pending")
 async def get_pending_products(store_id: Optional[int] = None):
     """Get products pending approval"""
+    from models.database import SessionLocal, Product
     db = SessionLocal()
     query = db.query(Product).filter(Product.status == "pending_approval")
     if store_id:
@@ -249,6 +252,7 @@ async def run_pricing_optimization(store_id: Optional[int] = None):
 @app.get("/api/pricing/pending")
 async def get_pending_price_changes(store_id: Optional[int] = None):
     """Get pending price changes"""
+    from models.database import SessionLocal, PriceChange, Product
     db = SessionLocal()
     query = db.query(PriceChange).filter(PriceChange.status == "pending")
     if store_id:
@@ -367,6 +371,7 @@ async def get_scheduler_jobs():
 @app.get("/api/stats")
 async def get_dashboard_stats():
     """Get dashboard statistics"""
+    from models.database import SessionLocal, Product, PriceChange, OrderException, Store
     db = SessionLocal()
     
     stats = {
