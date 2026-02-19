@@ -25,6 +25,10 @@ class AIStoreBuilder:
         """
         Create a complete Shopify store from a specification
         
+        SHOPIFY-ONLY MODE: Creates store record and generates content,
+        but requires manual store setup via Shopify
+        FULL MODE: Uses AutoDS AI Store Builder
+        
         Args:
             store_spec: {
                 "niche": str,
@@ -46,54 +50,102 @@ class AIStoreBuilder:
             "store_id": None,
             "shopify_domain": None,
             "products_imported": [],
-            "errors": []
+            "errors": [],
+            "mode": "SHOPIFY-ONLY" if self.autods.shopify_mode else "FULL"
         }
         
         try:
-            # Step 1: Trigger AutoDS AI Store Builder
-            print(f"🏗️  Starting AI Store Builder for: {store_spec['brand_name']}")
-            builder_response = await self.autods.create_ai_store(store_spec)
-            result["steps_completed"].append("autods_store_builder_triggered")
-            result["autods_job_id"] = builder_response.get("job_id")
-            
-            # Step 2: Poll for completion (in production, use webhook)
-            store_data = await self._wait_for_store_builder(
-                builder_response.get("job_id")
-            )
-            result["steps_completed"].append("store_builder_completed")
-            result["shopify_domain"] = store_data.get("shopify_domain")
-            
-            # Step 3: Generate additional AI content
-            print("✍️  Generating store content...")
-            store_content = await self.ai.generate_store_content(store_spec)
-            result["steps_completed"].append("content_generated")
-            
-            # Step 4: Update Shopify pages with AI content
-            await self._update_store_pages(store_data.get("shopify_domain"), store_content)
-            result["steps_completed"].append("pages_updated")
-            
-            # Step 5: Save to database
-            db = SessionLocal()
-            store = Store(
-                shopify_store_id=store_data.get("shopify_store_id"),
-                shopify_domain=store_data.get("shopify_domain"),
-                brand_name=store_spec["brand_name"],
-                niche=store_spec["niche"],
-                target_country=store_spec.get("target_country", "US"),
-                currency="USD",
-                primary_color=store_spec.get("primary_color", "#000000"),
-                secondary_color=store_spec.get("secondary_color", "#ffffff"),
-                brand_tone=store_spec.get("brand_tone", "professional"),
-                autods_connected=True,
-                auto_fulfillment_enabled=True
-            )
-            db.add(store)
-            db.commit()
-            result["store_id"] = store.id
-            db.close()
-            
-            result["status"] = "completed"
-            print(f"✅ Store creation completed: {result['shopify_domain']}")
+            if self.autods.shopify_mode:
+                # SHOPIFY-ONLY MODE
+                print(f"🏗️  SHOPIFY-ONLY MODE: Setting up store for: {store_spec['brand_name']}")
+                
+                # Step 1: Generate AI content
+                print("✍️  Generating store content...")
+                store_content = await self.ai.generate_store_content(store_spec)
+                result["steps_completed"].append("content_generated")
+                result["generated_content"] = {
+                    "about_us_html": store_content.get("about_us_html", "")[:200] + "...",
+                    "shipping_policy_html": store_content.get("shipping_policy_html", "")[:200] + "...",
+                    "faq_count": len(store_content.get("faq", []))
+                }
+                
+                # Step 2: Save to database
+                db = SessionLocal()
+                store = Store(
+                    shopify_store_id="manual_setup",
+                    shopify_domain=settings.shopify.shop_url or "pending-setup.myshopify.com",
+                    brand_name=store_spec["brand_name"],
+                    niche=store_spec["niche"],
+                    target_country=store_spec.get("target_country", "US"),
+                    currency="USD",
+                    primary_color=store_spec.get("primary_color", "#000000"),
+                    secondary_color=store_spec.get("secondary_color", "#ffffff"),
+                    brand_tone=store_spec.get("brand_tone", "professional"),
+                    autods_connected=False,
+                    auto_fulfillment_enabled=False
+                )
+                db.add(store)
+                db.commit()
+                result["store_id"] = store.id
+                db.close()
+                result["steps_completed"].append("saved_to_database")
+                
+                result["status"] = "completed"
+                result["message"] = "SHOPIFY-ONLY MODE: Store record created"
+                result["next_steps"] = [
+                    "1. Complete Shopify OAuth: /auth/shopify/install?shop=YOURSTORE.myshopify.com",
+                    "2. Add products manually via POST /api/products/manual-add",
+                    "3. Use AI content generated for your About Us, Shipping, FAQ pages",
+                    "4. Get AutoDS API key for full automation"
+                ]
+                print(f"✅ Store record created: ID {result['store_id']}")
+                
+            else:
+                # FULL MODE with AutoDS
+                # Step 1: Trigger AutoDS AI Store Builder
+                print(f"🏗️  Starting AI Store Builder for: {store_spec['brand_name']}")
+                builder_response = await self.autods.create_ai_store(store_spec)
+                result["steps_completed"].append("autods_store_builder_triggered")
+                result["autods_job_id"] = builder_response.get("job_id")
+                
+                # Step 2: Poll for completion (in production, use webhook)
+                store_data = await self._wait_for_store_builder(
+                    builder_response.get("job_id")
+                )
+                result["steps_completed"].append("store_builder_completed")
+                result["shopify_domain"] = store_data.get("shopify_domain")
+                
+                # Step 3: Generate additional AI content
+                print("✍️  Generating store content...")
+                store_content = await self.ai.generate_store_content(store_spec)
+                result["steps_completed"].append("content_generated")
+                
+                # Step 4: Update Shopify pages with AI content
+                await self._update_store_pages(store_data.get("shopify_domain"), store_content)
+                result["steps_completed"].append("pages_updated")
+                
+                # Step 5: Save to database
+                db = SessionLocal()
+                store = Store(
+                    shopify_store_id=store_data.get("shopify_store_id"),
+                    shopify_domain=store_data.get("shopify_domain"),
+                    brand_name=store_spec["brand_name"],
+                    niche=store_spec["niche"],
+                    target_country=store_spec.get("target_country", "US"),
+                    currency="USD",
+                    primary_color=store_spec.get("primary_color", "#000000"),
+                    secondary_color=store_spec.get("secondary_color", "#ffffff"),
+                    brand_tone=store_spec.get("brand_tone", "professional"),
+                    autods_connected=True,
+                    auto_fulfillment_enabled=True
+                )
+                db.add(store)
+                db.commit()
+                result["store_id"] = store.id
+                db.close()
+                
+                result["status"] = "completed"
+                print(f"✅ Store creation completed: {result['shopify_domain']}")
             
         except Exception as e:
             result["status"] = "failed"

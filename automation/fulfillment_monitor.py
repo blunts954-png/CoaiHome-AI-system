@@ -26,6 +26,8 @@ class FulfillmentMonitor:
     async def run_inventory_sync(self, store_id: Optional[int] = None) -> Dict:
         """
         Sync inventory levels and detect issues
+        
+        SHOPIFY-ONLY MODE: Syncs from Shopify instead of AutoDS
         """
         db = SessionLocal()
         
@@ -42,7 +44,8 @@ class FulfillmentMonitor:
             "stock_updates": 0,
             "stockouts_detected": 0,
             "products_paused": 0,
-            "errors": []
+            "errors": [],
+            "mode": "SHOPIFY-ONLY" if self.autods.shopify_mode else "FULL"
         }
         
         try:
@@ -50,16 +53,24 @@ class FulfillmentMonitor:
             
             for product in products:
                 try:
-                    if not product.autods_product_id:
+                    # SHOPIFY MODE: Get inventory from Shopify directly
+                    if self.autods.shopify_mode and product.shopify_product_id:
+                        shopify_product = await self.shopify.get_product(product.shopify_product_id)
+                        variants = shopify_product.get("product", {}).get("variants", [])
+                        if variants:
+                            new_stock = variants[0].get("inventory_quantity", 0)
+                        else:
+                            continue
+                    elif product.autods_product_id:
+                        # FULL MODE: Get from AutoDS
+                        inventory = await self.autods.get_inventory_status(
+                            product.autods_product_id
+                        )
+                        new_stock = inventory.get("available_quantity", 0)
+                    else:
                         continue
                     
-                    # Get current inventory from AutoDS
-                    inventory = await self.autods.get_inventory_status(
-                        product.autods_product_id
-                    )
-                    
-                    new_stock = inventory.get("available_quantity", 0)
-                    old_stock = product.stock_quantity
+                    old_stock = product.stock_quantity or 0
                     
                     # Update if changed
                     if new_stock != old_stock:
@@ -119,11 +130,41 @@ class FulfillmentMonitor:
     async def check_fulfillment_exceptions(self) -> Dict:
         """
         Check for orders that failed auto-fulfillment
+        
+        SHOPIFY-ONLY MODE: Checks Shopify for unfulfilled orders
+        FULL MODE: Checks AutoDS for failed fulfillments
         """
         db = SessionLocal()
         
         try:
-            # Get recent orders from AutoDS
+            if self.autods.shopify_mode:
+                # SHOPIFY MODE: Check for unfulfilled orders in Shopify
+                recent_orders = await self.shopify.list_orders(
+                    status="any",
+                    limit=100
+                )
+                
+                orders = recent_orders.get("orders", [])
+                unfulfilled = [o for o in orders if not o.get("fulfillment_status")]
+                
+                return {
+                    "status": "completed",
+                    "mode": "SHOPIFY-ONLY",
+                    "orders_checked": len(orders),
+                    "unfulfilled_orders": len(unfulfilled),
+                    "note": "Fulfill these orders manually via Shopify or AutoDS dashboard",
+                    "unfulfilled": [
+                        {
+                            "id": o.get("id"),
+                            "order_number": o.get("name"),
+                            "total": o.get("total_price"),
+                            "customer": o.get("customer", {}).get("email") if o.get("customer") else None
+                        }
+                        for o in unfulfilled[:10]  # Show first 10
+                    ]
+                }
+            
+            # FULL MODE: Get recent orders from AutoDS
             recent_orders = await self.autods.get_orders(
                 status="pending",
                 limit=100
@@ -207,7 +248,21 @@ class FulfillmentMonitor:
     async def update_supplier_performance(self) -> Dict:
         """
         Analyze and update supplier performance metrics
+        
+        SHOPIFY-ONLY MODE: Not available (requires AutoDS supplier data)
         """
+        if self.autods.shopify_mode:
+            return {
+                "status": "shopify_only_mode",
+                "message": "Supplier performance tracking requires AutoDS API",
+                "note": "Track supplier performance manually in AutoDS dashboard",
+                "alternatives": [
+                    "Use AutoDS dashboard for supplier analytics",
+                    "Track order issues manually per supplier",
+                    "Get AutoDS API key for automated tracking"
+                ]
+            }
+        
         db = SessionLocal()
         
         try:

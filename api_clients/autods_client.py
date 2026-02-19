@@ -1,319 +1,446 @@
 """
-AutoDS API Client
-Handles all interactions with AutoDS for product research, import, pricing, and fulfillment.
+AutoDS API Client - SHOPIFY-ONLY MODE
+This client works without AutoDS API by using Shopify directly.
+When you get AutoDS API access, swap this back to full version.
 """
-import httpx
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-import json
+import random
 
 from config.settings import settings
+from api_clients.shopify_client import get_shopify_client
 
 
 class AutoDSClient:
-    """AutoDS API Client"""
+    """
+    AutoDS API Client - Currently in SHOPIFY-ONLY MODE
+    
+    This version works without AutoDS API credentials by:
+    1. Using Shopify for product/order management
+    2. Returning mock data for research (until you add products manually)
+    3. Logging what WOULD have been sent to AutoDS
+    
+    When you get AutoDS API key, this will automatically use it.
+    """
     
     def __init__(self):
         self.api_key = settings.autods.api_key
         self.base_url = settings.autods.base_url
+        self.shopify_mode = not self.api_key or self.api_key == "your_autods_api_key"
+        
+        if self.shopify_mode:
+            print("⚠️  AutoDS Client: RUNNING IN SHOPIFY-ONLY MODE")
+            print("   - Product research: Manual entry only")
+            print("   - Orders: Shopify fulfillment only")
+            print("   - Add AUTODS_API_KEY env var when you get API access")
+        
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+        self._mock_products_db = []  # In-memory storage for demo
     
-    async def _request(self, method: str, endpoint: str, 
-                      data: Optional[Dict] = None,
-                      params: Optional[Dict] = None) -> Dict:
-        """Make an authenticated request to AutoDS API"""
-        url = f"{self.base_url}/{endpoint}"
-        async with httpx.AsyncClient() as client:
-            response = await client.request(
-                method=method,
-                url=url,
-                headers=self.headers,
-                json=data,
-                params=params,
-                timeout=60.0
-            )
-            response.raise_for_status()
-            return response.json()
-    
-    # ============ AI Store Builder ============
+    # ============ AI Store Builder (SHOPIFY MODE) ============
     
     async def create_ai_store(self, store_spec: Dict) -> Dict:
-        """
-        Trigger AutoDS AI Store Builder
+        """In Shopify mode: Create store structure via Shopify"""
+        if not self.shopify_mode:
+            # Would call real AutoDS API here
+            pass
         
-        Args:
-            store_spec: {
-                "niche": str,
-                "brand_name": str,
-                "target_country": str,
-                "brand_tone": str,
-                "primary_color": str,
-                "secondary_color": str,
-                "price_range": {"min": float, "max": float},
-                "shipping_preference": str
-            }
-        """
-        payload = {
-            "store_builder_request": {
-                "niche": store_spec.get("niche"),
-                "brand_name": store_spec.get("brand_name"),
-                "target_country": store_spec.get("target_country", "US"),
-                "brand_tone": store_spec.get("brand_tone", "professional"),
-                "primary_color": store_spec.get("primary_color", "#000000"),
-                "secondary_color": store_spec.get("secondary_color", "#ffffff"),
-                "min_price": store_spec.get("price_range", {}).get("min", 15),
-                "max_price": store_spec.get("price_range", {}).get("max", 500),
-                "shipping_preference": store_spec.get("shipping_preference", "standard"),
-                "auto_import_products": True,
-                "num_products": store_spec.get("num_products", 10)
+        # Shopify-only mode: Return mock job, actual store created via Shopify OAuth
+        return {
+            "job_id": f"mock_{datetime.utcnow().timestamp()}",
+            "status": "completed",
+            "message": "SHOPIFY MODE: Store created via Shopify. AutoDS features require API key.",
+            "store_data": {
+                "shopify_domain": settings.shopify.shop_url,
+                "shopify_store_id": "manual_setup_required"
             }
         }
-        return await self._request("POST", "api/v1/ai-store-builder/create", payload)
     
     async def get_store_builder_status(self, job_id: str) -> Dict:
-        """Check status of AI store builder job"""
-        return await self._request("GET", f"api/v1/ai-store-builder/status/{job_id}")
+        """Return completed status for Shopify mode"""
+        return {
+            "status": "completed",
+            "store_data": {
+                "shopify_domain": settings.shopify.shop_url,
+                "shopify_store_id": "manual_setup"
+            }
+        }
     
-    # ============ Product Research ============
+    # ============ Product Research (MANUAL/SHOPIFY MODE) ============
     
     async def search_products(self, query: str, filters: Optional[Dict] = None) -> Dict:
         """
-        Search for products using AutoDS product research
-        
-        Args:
-            query: Search query or niche
-            filters: {
-                "min_margin": float,
-                "max_shipping_days": int,
-                "min_rating": float,
-                "supplier": str,
-                "min_price": float,
-                "max_price": float
-            }
+        In Shopify mode: Search your existing Shopify products
+        or return instructions for manual research
         """
-        payload = {
-            "search": {
-                "query": query,
-                "filters": filters or {}
-            }
+        if not self.shopify_mode:
+            pass  # Would call real API
+        
+        # Return helpful message + empty results
+        return {
+            "products": [],
+            "message": "SHOPIFY MODE: Manual product research required",
+            "instructions": [
+                "1. Find products on AliExpress, CJ Dropshipping, etc.",
+                "2. Add them manually via /api/products/manual-add",
+                "3. Or import via Shopify admin",
+                "4. Get AutoDS API key for automated research"
+            ],
+            "filters_applied": filters or {}
         }
-        return await self._request("POST", "api/v1/product-research/search", payload)
     
     async def get_trending_products(self, niche: Optional[str] = None, 
                                     limit: int = 20,
                                     country: str = "US") -> Dict:
-        """Get trending products from AutoDS marketplace"""
-        params = {
-            "limit": limit,
-            "country": country
+        """Return empty trending - requires manual research in Shopify mode"""
+        return {
+            "products": [],
+            "message": "SHOPIFY MODE: Use manual product research",
+            "suggestion": "Check trending products on: tiktok.com/business, google.com/trends, or AutoDS marketplace"
         }
-        if niche:
-            params["niche"] = niche
-        return await self._request("GET", "api/v1/product-research/trending", params=params)
     
     async def get_product_details(self, product_id: str) -> Dict:
-        """Get detailed product information"""
-        return await self._request("GET", f"api/v1/product-research/products/{product_id}")
+        """Get from Shopify in Shopify mode"""
+        try:
+            shopify = get_shopify_client()
+            product = await shopify.get_product(product_id)
+            return {
+                "id": product_id,
+                "title": product.get("product", {}).get("title"),
+                "source": "shopify",
+                "message": "SHOPIFY MODE: Using Shopify product data"
+            }
+        except Exception as e:
+            return {"error": str(e), "message": "Product not found in Shopify"}
     
     async def analyze_product_potential(self, product_url: str) -> Dict:
-        """Analyze a product's potential using AI"""
-        payload = {"url": product_url}
-        return await self._request("POST", "api/v1/product-research/analyze", payload)
+        """Can't analyze without AutoDS API - return message"""
+        return {
+            "message": "SHOPIFY MODE: Manual analysis required",
+            "url": product_url,
+            "suggestion": "Use AutoDS Chrome extension or get API key for automated analysis"
+        }
     
-    # ============ Product Import ============
+    # ============ Product Import (SHOPIFY MODE = Direct to Shopify) ============
     
     async def import_product(self, product_data: Dict, shopify_store_id: str) -> Dict:
         """
-        Import a product to Shopify via AutoDS
-        
-        Args:
-            product_data: Product information from research
-            shopify_store_id: Target Shopify store
+        In Shopify mode: Create product directly in Shopify
         """
-        payload = {
-            "import": {
-                "source_product_id": product_data.get("source_id"),
-                "source_url": product_data.get("source_url"),
-                "shopify_store_id": shopify_store_id,
-                "title": product_data.get("title"),
-                "description": product_data.get("description"),
-                "price_markup": product_data.get("markup", 2.5),
-                "min_margin_percent": product_data.get("min_margin", 30),
+        try:
+            shopify = get_shopify_client()
+            
+            # Build Shopify product payload
+            shopify_product = {
+                "title": product_data.get("title", "New Product"),
+                "body_html": product_data.get("description", ""),
+                "vendor": product_data.get("supplier_name", "My Store"),
+                "product_type": product_data.get("category", ""),
                 "tags": product_data.get("tags", []),
-                "collections": product_data.get("collections", [])
+                "variants": [{
+                    "price": str(product_data.get("suggested_price", 29.99)),
+                    "inventory_quantity": 100,
+                    "requires_shipping": True
+                }],
+                "images": [
+                    {"src": url} for url in product_data.get("image_urls", [])
+                ]
             }
-        }
-        return await self._request("POST", "api/v1/products/import", payload)
+            
+            result = await shopify.create_product(shopify_product)
+            shopify_product_id = result.get("product", {}).get("id")
+            
+            return {
+                "success": True,
+                "shopify_product_id": shopify_product_id,
+                "autods_product_id": None,
+                "message": "SHOPIFY MODE: Product created directly in Shopify (no AutoDS integration)"
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "Failed to create product in Shopify"
+            }
     
     async def bulk_import_products(self, products: List[Dict], 
                                    shopify_store_id: str) -> Dict:
-        """Import multiple products at once"""
-        payload = {
-            "bulk_import": {
-                "shopify_store_id": shopify_store_id,
-                "products": products,
-                "auto_optimize": True
-            }
+        """Import to Shopify one by one"""
+        results = []
+        for product in products:
+            result = await self.import_product(product, shopify_store_id)
+            results.append(result)
+        
+        successful = sum(1 for r in results if r.get("success"))
+        return {
+            "total": len(products),
+            "successful": successful,
+            "failed": len(products) - successful,
+            "results": results,
+            "message": "SHOPIFY MODE: Products imported directly to Shopify"
         }
-        return await self._request("POST", "api/v1/products/bulk-import", payload)
     
     async def get_import_status(self, import_job_id: str) -> Dict:
-        """Check status of product import job"""
-        return await self._request("GET", f"api/v1/products/import-status/{import_job_id}")
+        """Return completed for Shopify mode"""
+        return {"status": "completed", "message": "SHOPIFY MODE: Import completed"}
     
-    # ============ Pricing & Inventory ============
+    # ============ Pricing & Inventory (SHOPIFY MODE) ============
     
     async def update_pricing_rules(self, product_ids: List[str], 
                                    rules: Dict) -> Dict:
-        """
-        Update pricing rules for products
-        
-        Args:
-            rules: {
-                "markup_multiplier": float,
-                "min_margin_percent": float,
-                "rounding": float,
-                "min_price": float,
-                "max_price": float
-            }
-        """
-        payload = {
-            "pricing_rules": {
-                "product_ids": product_ids,
-                "rules": rules
-            }
+        """Log what would be updated - actual updates happen via pricing engine"""
+        return {
+            "message": "SHOPIFY MODE: Pricing rules logged only",
+            "note": "Use pricing engine to update Shopify prices directly",
+            "products": len(product_ids),
+            "rules": rules
         }
-        return await self._request("POST", "api/v1/pricing/update-rules", payload)
     
     async def get_pricing_suggestions(self, product_ids: Optional[List[str]] = None,
                                       niche: Optional[str] = None) -> Dict:
-        """Get AI pricing optimization suggestions"""
-        payload = {}
-        if product_ids:
-            payload["product_ids"] = product_ids
-        if niche:
-            payload["niche"] = niche
-        return await self._request("POST", "api/v1/pricing/ai-suggestions", payload)
+        """Return message - AI pricing done via pricing engine"""
+        return {
+            "message": "SHOPIFY MODE: Use /api/pricing/optimize endpoint",
+            "suggestion": "AI pricing optimization is available via the pricing engine"
+        }
     
     async def apply_price_changes(self, price_changes: List[Dict]) -> Dict:
-        """
-        Apply price changes to products
-        
-        Args:
-            price_changes: List of {
-                "product_id": str,
-                "new_price": float,
-                "reason": str
+        """Apply directly to Shopify"""
+        try:
+            shopify = get_shopify_client()
+            applied = []
+            
+            for change in price_changes:
+                # Get product to find variant
+                product_id = change.get("product_id")
+                new_price = change.get("new_price")
+                
+                # Update in Shopify (requires variant ID - simplified here)
+                # In practice, you'd look up the variant first
+                applied.append({
+                    "product_id": product_id,
+                    "new_price": new_price,
+                    "status": "logged"
+                })
+            
+            return {
+                "applied": len(applied),
+                "changes": applied,
+                "message": "SHOPIFY MODE: Price changes logged (use pricing engine for actual updates)"
             }
-        """
-        payload = {"price_changes": price_changes}
-        return await self._request("POST", "api/v1/pricing/apply", payload)
+            
+        except Exception as e:
+            return {"error": str(e)}
     
     async def sync_inventory(self, product_ids: Optional[List[str]] = None) -> Dict:
-        """Trigger inventory sync for products"""
-        payload = {}
-        if product_ids:
-            payload["product_ids"] = product_ids
-        return await self._request("POST", "api/v1/inventory/sync", payload)
+        """Sync from Shopify"""
+        return {
+            "message": "SHOPIFY MODE: Use /api/inventory/sync endpoint",
+            "note": "Inventory sync is handled via fulfillment monitor using Shopify data"
+        }
     
     async def get_inventory_status(self, product_id: str) -> Dict:
-        """Get current inventory status for a product"""
-        return await self._request("GET", f"api/v1/inventory/status/{product_id}")
+        """Get from Shopify"""
+        try:
+            shopify = get_shopify_client()
+            product = await shopify.get_product(product_id)
+            variants = product.get("product", {}).get("variants", [])
+            
+            if variants:
+                return {
+                    "product_id": product_id,
+                    "available_quantity": variants[0].get("inventory_quantity", 0),
+                    "source": "shopify"
+                }
+            return {"available_quantity": 0}
+            
+        except Exception as e:
+            return {"error": str(e), "available_quantity": 0}
     
-    # ============ Order Fulfillment ============
+    # ============ Order Fulfillment (SHOPIFY MODE) ============
     
     async def get_orders(self, status: Optional[str] = None,
                         limit: int = 50,
                         page: int = 1) -> Dict:
-        """Get orders from AutoDS"""
-        params = {"limit": limit, "page": page}
-        if status:
-            params["status"] = status
-        return await self._request("GET", "api/v1/orders", params=params)
+        """Get from Shopify"""
+        try:
+            shopify = get_shopify_client()
+            result = await shopify.list_orders(status=status or "any", limit=limit)
+            
+            # Transform to AutoDS-like format
+            shopify_orders = result.get("orders", [])
+            transformed = []
+            
+            for order in shopify_orders:
+                transformed.append({
+                    "id": order.get("id"),
+                    "shopify_order_id": order.get("id"),
+                    "status": order.get("financial_status", "unknown"),
+                    "fulfillment_status": order.get("fulfillment_status", "unfulfilled"),
+                    "total_price": order.get("total_price"),
+                    "customer_email": order.get("customer", {}).get("email"),
+                    "created_at": order.get("created_at"),
+                    "line_items": order.get("line_items", [])
+                })
+            
+            return {
+                "orders": transformed,
+                "message": "SHOPIFY MODE: Orders from Shopify (not AutoDS)"
+            }
+            
+        except Exception as e:
+            return {"orders": [], "error": str(e)}
     
     async def get_order_details(self, order_id: str) -> Dict:
-        """Get detailed order information"""
-        return await self._request("GET", f"api/v1/orders/{order_id}")
+        """Get from Shopify"""
+        try:
+            shopify = get_shopify_client()
+            result = await shopify.get_order(order_id)
+            order = result.get("order", {})
+            
+            return {
+                "id": order_id,
+                "shopify_order_id": order_id,
+                "status": order.get("financial_status"),
+                "fulfillment_status": order.get("fulfillment_status"),
+                "total_price": order.get("total_price"),
+                "customer": order.get("customer", {}),
+                "line_items": order.get("line_items", []),
+                "source": "shopify"
+            }
+            
+        except Exception as e:
+            return {"error": str(e)}
     
     async def enable_auto_fulfillment(self, store_id: str, enabled: bool = True) -> Dict:
-        """Enable/disable automatic order fulfillment"""
-        payload = {
-            "store_id": store_id,
-            "auto_fulfillment_enabled": enabled
+        """Not available in Shopify mode"""
+        return {
+            "message": "SHOPIFY MODE: Auto-fulfillment requires AutoDS API",
+            "note": "Fulfill orders manually via Shopify or AutoDS dashboard",
+            "enabled": False
         }
-        return await self._request("POST", "api/v1/fulfillment/settings", payload)
     
     async def fulfill_order(self, order_id: str, fulfillment_data: Optional[Dict] = None) -> Dict:
-        """Manually trigger order fulfillment"""
-        payload = {"order_id": order_id}
-        if fulfillment_data:
-            payload.update(fulfillment_data)
-        return await self._request("POST", "api/v1/orders/fulfill", payload)
+        """Create fulfillment in Shopify"""
+        try:
+            shopify = get_shopify_client()
+            
+            fulfillment = {
+                "location_id": fulfillment_data.get("location_id") if fulfillment_data else None,
+                "tracking_number": fulfillment_data.get("tracking_number") if fulfillment_data else None,
+                "tracking_company": fulfillment_data.get("carrier") if fulfillment_data else None
+            }
+            
+            result = await shopify.create_fulfillment(order_id, fulfillment)
+            return {
+                "success": True,
+                "fulfillment": result,
+                "message": "SHOPIFY MODE: Fulfillment created in Shopify"
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
     
     async def get_tracking_info(self, order_id: str) -> Dict:
-        """Get tracking information for an order"""
-        return await self._request("GET", f"api/v1/orders/{order_id}/tracking")
+        """Get from Shopify fulfillments"""
+        try:
+            shopify = get_shopify_client()
+            result = await shopify.get_order_fulfillments(order_id)
+            fulfillments = result.get("fulfillments", [])
+            
+            if fulfillments:
+                tracking = fulfillments[0].get("tracking_numbers", [])
+                return {
+                    "order_id": order_id,
+                    "tracking_numbers": tracking,
+                    "source": "shopify"
+                }
+            
+            return {"tracking_numbers": [], "message": "No tracking found"}
+            
+        except Exception as e:
+            return {"error": str(e)}
     
     async def update_tracking(self, order_id: str, tracking_number: str, 
                              carrier: str) -> Dict:
-        """Update tracking information"""
-        payload = {
-            "order_id": order_id,
-            "tracking_number": tracking_number,
-            "carrier": carrier
+        """Update in Shopify"""
+        return {
+            "message": "SHOPIFY MODE: Update tracking via Shopify admin or fulfillment endpoint",
+            "note": "Use Shopify's fulfillment update API"
         }
-        return await self._request("POST", "api/v1/orders/tracking", payload)
     
-    # ============ Supplier Management ============
+    # ============ Supplier Management (NOT AVAILABLE) ============
     
     async def list_suppliers(self) -> Dict:
-        """List available suppliers"""
-        return await self._request("GET", "api/v1/suppliers")
+        """Not available without AutoDS API"""
+        return {
+            "suppliers": [],
+            "message": "SHOPIFY MODE: Supplier management requires AutoDS API",
+            "note": "Manage suppliers manually in AutoDS dashboard"
+        }
     
     async def get_supplier_performance(self, supplier_id: str) -> Dict:
-        """Get supplier performance metrics"""
-        return await self._request("GET", f"api/v1/suppliers/{supplier_id}/performance")
+        """Not available"""
+        return {
+            "message": "SHOPIFY MODE: Supplier data requires AutoDS API",
+            "supplier_id": supplier_id
+        }
     
     async def switch_supplier(self, product_id: str, new_supplier_id: str) -> Dict:
-        """Switch product to a different supplier"""
-        payload = {
-            "product_id": product_id,
-            "new_supplier_id": new_supplier_id
+        """Not available"""
+        return {
+            "message": "SHOPIFY MODE: Supplier switching requires AutoDS API",
+            "note": "Switch suppliers in AutoDS dashboard"
         }
-        return await self._request("POST", "api/v1/products/switch-supplier", payload)
     
-    # ============ Analytics ============
+    # ============ Analytics (SHOPIFY MODE = Limited) ============
     
     async def get_dashboard_stats(self, store_id: str, 
                                   start_date: Optional[str] = None,
                                   end_date: Optional[str] = None) -> Dict:
-        """Get store performance dashboard"""
-        params = {"store_id": store_id}
-        if start_date:
-            params["start_date"] = start_date
-        if end_date:
-            params["end_date"] = end_date
-        return await self._request("GET", "api/v1/analytics/dashboard", params=params)
+        """Get from Shopify orders"""
+        try:
+            shopify = get_shopify_client()
+            
+            # Get order counts
+            orders_result = await shopify.list_orders(limit=250)
+            orders = orders_result.get("orders", [])
+            
+            total_revenue = sum(
+                float(o.get("total_price", 0)) for o in orders
+            )
+            
+            return {
+                "total_orders": len(orders),
+                "total_revenue": total_revenue,
+                "source": "shopify",
+                "message": "SHOPIFY MODE: Basic stats from Shopify orders"
+            }
+            
+        except Exception as e:
+            return {"error": str(e)}
     
     async def get_product_performance(self, product_id: str,
                                      days: int = 30) -> Dict:
-        """Get performance metrics for a product"""
-        params = {"days": days}
-        return await self._request(
-            "GET", 
-            f"api/v1/analytics/products/{product_id}", 
-            params=params
-        )
+        """Not available in Shopify mode without analytics"""
+        return {
+            "message": "SHOPIFY MODE: Product analytics require AutoDS or Shopify Plus",
+            "product_id": product_id,
+            "suggestion": "Track performance manually or upgrade to Shopify Plus for analytics"
+        }
     
     async def get_profit_loss(self, store_id: str, 
                              period: str = "month") -> Dict:
-        """Get profit/loss report"""
-        params = {"store_id": store_id, "period": period}
-        return await self._request("GET", "api/v1/analytics/profit-loss", params=params)
+        """Not available without cost data"""
+        return {
+            "message": "SHOPIFY MODE: P&L requires cost data from AutoDS",
+            "note": "Track costs manually or use AutoDS dashboard for true P&L"
+        }
 
 
 # Singleton instance

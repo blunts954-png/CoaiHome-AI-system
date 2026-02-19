@@ -347,6 +347,203 @@ async def reject_product(product_id: int, reason: Optional[str] = ""):
     return result
 
 
+# Manual product addition (for Shopify-only mode)
+class ManualProduct(BaseModel):
+    title: str
+    description: str = ""
+    cost_price: float
+    selling_price: float
+    supplier_name: str = ""
+    supplier_url: str = ""  # AliExpress, CJ Dropshipping, etc.
+    image_urls: List[str] = []
+    tags: List[str] = []
+    category: str = ""
+
+
+@app.post("/api/products/manual-add")
+async def add_product_manual(product: ManualProduct, store_id: int = 1):
+    """
+    Add a product manually (Shopify-only mode)
+    Use this when you don't have AutoDS API access
+    """
+    from api_clients.autods_client import get_autods_client
+    from models.database import SessionLocal, Product, ProductStatus, Store
+    
+    db = SessionLocal()
+    store = db.query(Store).filter(Store.id == store_id).first()
+    
+    if not store:
+        db.close()
+        raise HTTPException(status_code=404, detail="Store not found")
+    
+    try:
+        # Import directly to Shopify (bypassing AutoDS)
+        autods = get_autods_client()
+        
+        import_data = {
+            "title": product.title,
+            "description": product.description,
+            "cost_price": product.cost_price,
+            "suggested_price": product.selling_price,
+            "supplier_name": product.supplier_name,
+            "tags": product.tags,
+            "image_urls": product.image_urls,
+            "category": product.category
+        }
+        
+        result = await autods.import_product(import_data, store.shopify_domain)
+        
+        if result.get("success"):
+            # Save to local DB
+            db_product = Product(
+                store_id=store_id,
+                shopify_product_id=result.get("shopify_product_id"),
+                autods_product_id=None,  # No AutoDS integration
+                title=product.title,
+                description=product.description,
+                cost_price=product.cost_price,
+                selling_price=product.selling_price,
+                supplier_name=product.supplier_name,
+                supplier_url=product.supplier_url,
+                ai_import_confidence=1.0,  # Manual = high confidence
+                status=ProductStatus.ACTIVE
+            )
+            db.add(db_product)
+            db.commit()
+            
+            return {
+                "status": "success",
+                "message": "Product added successfully (Shopify-only mode)",
+                "product_id": db_product.id,
+                "shopify_product_id": result.get("shopify_product_id"),
+                "note": "Fulfill orders manually or via AutoDS dashboard until API access is available"
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message", "Import failed"))
+            
+    except Exception as e:
+        db.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/products/list")
+async def list_all_products(store_id: Optional[int] = None, status: Optional[str] = None):
+    """List all products in the system"""
+    from models.database import SessionLocal, Product
+    
+    db = SessionLocal()
+    query = db.query(Product)
+    
+    if store_id:
+        query = query.filter(Product.store_id == store_id)
+    if status:
+        query = query.filter(Product.status == status)
+    
+    products = query.order_by(Product.created_at.desc()).all()
+    db.close()
+    
+    return {
+        "products": [
+            {
+                "id": p.id,
+                "title": p.title,
+                "cost_price": p.cost_price,
+                "selling_price": p.selling_price,
+                "profit_margin": round(((p.selling_price - p.cost_price) / p.selling_price * 100), 2) if p.selling_price else 0,
+                "supplier_name": p.supplier_name,
+                "status": p.status,
+                "shopify_product_id": p.shopify_product_id,
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            }
+            for p in products
+        ],
+        "total": len(products),
+        "mode": "SHOPIFY-ONLY (AutoDS API not configured)" if not settings.autods.api_key else "FULL MODE"
+    }
+
+
+@app.get("/api/shopify/products")
+async def get_shopify_products(limit: int = 50):
+    """Fetch products directly from Shopify"""
+    from api_clients.shopify_client import get_shopify_client
+    
+    try:
+        shopify = get_shopify_client()
+        result = await shopify.list_products(limit=limit)
+        
+        products = result.get("products", [])
+        return {
+            "products": [
+                {
+                    "id": p.get("id"),
+                    "title": p.get("title"),
+                    "vendor": p.get("vendor"),
+                    "product_type": p.get("product_type"),
+                    "status": p.get("status"),
+                    "price": p.get("variants", [{}])[0].get("price") if p.get("variants") else None,
+                    "inventory": p.get("variants", [{}])[0].get("inventory_quantity") if p.get("variants") else None
+                }
+                for p in products
+            ],
+            "count": len(products)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/shopify/orders")
+async def get_shopify_orders(limit: int = 50, status: str = "any"):
+    """Fetch orders directly from Shopify"""
+    from api_clients.shopify_client import get_shopify_client
+    
+    try:
+        shopify = get_shopify_client()
+        result = await shopify.list_orders(limit=limit, status=status)
+        
+        orders = result.get("orders", [])
+        return {
+            "orders": [
+                {
+                    "id": o.get("id"),
+                    "order_number": o.get("name"),
+                    "total_price": o.get("total_price"),
+                    "financial_status": o.get("financial_status"),
+                    "fulfillment_status": o.get("fulfillment_status"),
+                    "created_at": o.get("created_at"),
+                    "customer": o.get("customer", {}).get("email") if o.get("customer") else None
+                }
+                for o in orders
+            ],
+            "count": len(orders)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/system/status")
+async def get_system_status():
+    """Get system configuration status"""
+    return {
+        "mode": "SHOPIFY-ONLY" if not settings.autods.api_key else "FULL",
+        "shopify_connected": bool(settings.shopify.shop_url and settings.shopify.access_token),
+        "autods_connected": bool(settings.autods.api_key),
+        "features": {
+            "product_research": "MANUAL" if not settings.autods.api_key else "AUTOMATED",
+            "product_import": "SHOPIFY_DIRECT" if not settings.autods.api_key else "AUTODS",
+            "auto_fulfillment": "MANUAL" if not settings.autods.api_key else "AUTOMATED",
+            "pricing_optimization": "AVAILABLE",
+            "ai_content": "AVAILABLE",
+            "inventory_sync": "SHOPIFY_ONLY" if not settings.autods.api_key else "FULL"
+        },
+        "setup_instructions": None if settings.autods.api_key else [
+            "1. Find products on AliExpress/CJ Dropshipping/Spocket",
+            "2. Use POST /api/products/manual-add to add products",
+            "3. Manage orders via Shopify admin or AutoDS dashboard",
+            "4. Get AutoDS API key for full automation"
+        ]
+    }
+
+
 # ============ API Routes - Pricing ============
 
 @app.post("/api/pricing/optimize")

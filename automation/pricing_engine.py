@@ -96,14 +96,45 @@ class PricingEngine:
         data = []
         
         for product in products:
-            # Get analytics from AutoDS
-            try:
-                analytics = await self.autods.get_product_performance(
-                    product.autods_product_id,
-                    days=30
-                )
-            except:
-                analytics = {}
+            # Get analytics from AutoDS (if available)
+            analytics = {}
+            if not self.autods.shopify_mode and product.autods_product_id:
+                try:
+                    analytics = await self.autods.get_product_performance(
+                        product.autods_product_id,
+                        days=30
+                    )
+                except:
+                    pass
+            
+            # SHOPIFY-ONLY MODE: Try to get order data from Shopify
+            shopify_analytics = {}
+            if self.autods.shopify_mode and product.shopify_product_id:
+                try:
+                    # Get recent orders to estimate sales
+                    orders_result = await self.shopify.list_orders(
+                        created_at_min=(datetime.utcnow() - timedelta(days=30)).isoformat(),
+                        limit=250
+                    )
+                    orders = orders_result.get("orders", [])
+                    
+                    # Count orders containing this product
+                    product_orders = [
+                        o for o in orders 
+                        if any(
+                            str(product.shopify_product_id) in str(item.get("product_id"))
+                            for item in o.get("line_items", [])
+                        )
+                    ]
+                    
+                    shopify_analytics = {
+                        "orders_last_30_days": len(product_orders),
+                        "estimated_revenue": sum(
+                            float(o.get("total_price", 0)) for o in product_orders
+                        )
+                    }
+                except:
+                    pass
             
             # Calculate conversion rate
             views = product.views or 0
@@ -124,12 +155,14 @@ class PricingEngine:
                 "views": views,
                 "add_to_carts": add_to_carts,
                 "orders": orders,
-                "revenue": product.revenue,
+                "revenue": product.revenue or shopify_analytics.get("estimated_revenue", 0),
                 "conversion_rate": conversion_rate,
                 "cart_abandonment_rate": cart_abandonment,
                 "refund_rate": product.refund_rate,
                 "days_since_created": (datetime.utcnow() - product.created_at).days if product.created_at else 0,
-                "autods_analytics": analytics
+                "autods_analytics": analytics,
+                "shopify_analytics": shopify_analytics,
+                "mode": "SHOPIFY-ONLY" if self.autods.shopify_mode else "FULL"
             }
             
             data.append(product_info)
@@ -207,18 +240,29 @@ class PricingEngine:
     
     async def _apply_price_change(self, price_change: PriceChange, 
                                    product: Product):
-        """Apply a price change to Shopify and AutoDS"""
+        """Apply a price change to Shopify (and AutoDS if available)"""
         try:
             # Update in Shopify
-            if product.shopify_product_id and product.shopify_variant_id:
-                await self.shopify.update_product_price(
-                    product.shopify_product_id,
-                    product.shopify_variant_id,
-                    price_change.final_price
-                )
+            if product.shopify_product_id:
+                # Get variant ID if not stored
+                variant_id = product.shopify_variant_id
+                if not variant_id:
+                    # Fetch product to get variant ID
+                    shopify_product = await self.shopify.get_product(product.shopify_product_id)
+                    variants = shopify_product.get("product", {}).get("variants", [])
+                    if variants:
+                        variant_id = variants[0].get("id")
+                        product.shopify_variant_id = variant_id
+                
+                if variant_id:
+                    await self.shopify.update_product_price(
+                        product.shopify_product_id,
+                        variant_id,
+                        price_change.final_price
+                    )
             
-            # Update in AutoDS
-            if product.autods_product_id:
+            # Update in AutoDS (if available)
+            if not self.autods.shopify_mode and product.autods_product_id:
                 await self.autods.apply_price_changes([{
                     "product_id": product.autods_product_id,
                     "new_price": price_change.final_price,

@@ -26,12 +26,8 @@ class ProductResearchAutomation:
         """
         Run a complete product research job
         
-        Flow:
-        1. Search for trending products
-        2. Filter by constraints
-        3. AI analysis of opportunities
-        4. Select best products
-        5. Import approved products
+        SHOPIFY-ONLY MODE: Returns instructions for manual research
+        FULL MODE: Automated research via AutoDS
         """
         db = SessionLocal()
         store = db.query(Store).filter(Store.id == store_id).first()
@@ -42,7 +38,25 @@ class ProductResearchAutomation:
         
         niche = niche or store.niche
         
-        # Create job record
+        # Check if AutoDS API is available
+        if self.autods.shopify_mode:
+            return {
+                "status": "shopify_only_mode",
+                "message": "Automated product research requires AutoDS API",
+                "instructions": [
+                    "1. Find trending products manually on:",
+                    "   - TikTok Creative Center (ads.tiktok.com/business/creativecenter)",
+                    "   - Google Trends (trends.google.com)",
+                    "   - AliExpress Dropshipping Center",
+                    "   - CJ Dropshipping product recommendations",
+                    "2. Add products manually via POST /api/products/manual-add",
+                    "3. Or import directly in Shopify admin, then sync to this system"
+                ],
+                "alternative_endpoint": "/api/products/manual-add",
+                "niche": niche
+            }
+        
+        # Create job record (only for full mode)
         job = ProductResearchJob(
             store_id=store_id,
             niche=niche,
