@@ -1018,11 +1018,22 @@ async def generate_tiktok_content(store_id: Optional[int] = None):
     Generate complete TikTok content calendar for all products
     Creates scripts, hooks, CTAs, and hashtags
     """
-    from automation.tiktok_content_engine import get_tiktok_content_engine
-    engine = get_tiktok_content_engine()
-    
-    result = await engine.auto_create_content_for_store()
-    return result
+    try:
+        from automation.tiktok_content_engine import get_tiktok_content_engine
+        engine = get_tiktok_content_engine()
+        
+        result = await engine.auto_create_content_for_store()
+        return result
+    except Exception as e:
+        import traceback
+        print(f"Error generating TikTok content: {e}")
+        print(traceback.format_exc())
+        return {
+            "error": str(e),
+            "message": "Failed to generate content. Check server logs.",
+            "products": 0,
+            "content_pieces": 0
+        }
 
 
 @app.post("/api/tiktok/product-script")

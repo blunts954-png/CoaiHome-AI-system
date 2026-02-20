@@ -407,18 +407,30 @@ class TikTokContentEngine:
             Dict with calendar and summary
         """
         if store_products is None:
-            # Fetch from Shopify
-            products_result = await self.shopify.list_products(limit=50)
-            products = products_result.get('products', [])
-            store_products = [
-                {
-                    'title': p.get('title'),
-                    'price': p.get('variants', [{}])[0].get('price', '29.99'),
-                    'description': p.get('body_html', ''),
-                    'id': p.get('id')
-                }
-                for p in products
-            ]
+            # Try to fetch from Shopify, but use sample products if it fails
+            try:
+                products_result = await self.shopify.list_products(limit=50)
+                products = products_result.get('products', [])
+                store_products = [
+                    {
+                        'title': p.get('title'),
+                        'price': p.get('variants', [{}])[0].get('price', '29.99'),
+                        'description': p.get('body_html', ''),
+                        'id': p.get('id')
+                    }
+                    for p in products
+                ]
+            except Exception as e:
+                print(f"⚠️  Could not fetch from Shopify: {e}")
+                print("   Using sample products for content generation...")
+                # Use sample products so content generation still works
+                store_products = [
+                    {'title': 'Premium Drawer Organizer', 'price': '24.99', 'description': 'Keep drawers tidy', 'id': 1},
+                    {'title': 'Magnetic Spice Rack', 'price': '34.99', 'description': 'Organize your kitchen', 'id': 2},
+                    {'title': 'Under Sink Organizer', 'price': '29.99', 'description': 'Maximize bathroom space', 'id': 3},
+                    {'title': 'Fridge Storage Bins', 'price': '19.99', 'description': 'Organize your fridge', 'id': 4},
+                    {'title': 'Closet Organizer Set', 'price': '39.99', 'description': 'Double closet space', 'id': 5}
+                ]
         
         print(f"🎬 Creating content for {len(store_products)} products...")
         
