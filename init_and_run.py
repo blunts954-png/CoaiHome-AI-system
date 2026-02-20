@@ -11,6 +11,12 @@ def main():
     print("=" * 60)
     print()
     
+    # Import here after env vars are loaded
+    try:
+        from config.settings import settings
+    except Exception as e:
+        print(f"⚠️  Settings load error: {e}")
+    
     # Check required env vars
     shop_url = os.getenv("SHOPIFY_SHOP_URL", "")
     access_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")

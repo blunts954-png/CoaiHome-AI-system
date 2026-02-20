@@ -2,6 +2,7 @@
 Central configuration for the AI Dropshipping Automation System.
 All settings are loaded from environment variables with sensible defaults.
 """
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional, List
