@@ -13,14 +13,14 @@ class ShopifyConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SHOPIFY_")
     
     shop_url: str = Field(default="", description="Shopify store URL (e.g., mystore.myshopify.com)")
-    api_key: str = Field(default="", description="Shopify Admin API key")
-    api_secret: str = Field(default="", description="Shopify Admin API secret")
-    access_token: str = Field(default="", description="Shopify Admin API access token")
+    api_key: str = Field(default="", description="Shopify App Client ID (for OAuth)")
+    api_secret: str = Field(default="", description="Shopify App Secret (for OAuth)")
+    access_token: str = Field(default="", description="Shopify Admin API access token (for direct API calls)")
     api_version: str = Field(default="2024-01", description="Shopify API version")
     webhook_secret: str = Field(default="", description="Webhook validation secret")
     app_url: str = Field(default="", description="Public app URL (e.g., https://your-app.up.railway.app)")
     api_scopes: str = Field(
-        default="read_products,write_products,read_orders,write_orders,read_inventory,write_inventory",
+        default="read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_customers",
         description="Comma-separated Shopify OAuth scopes"
     )
 
@@ -101,7 +101,10 @@ class SystemConfig(BaseSettings):
     
     debug: bool = Field(default=False)
     log_level: str = Field(default="INFO")
-    database_url: str = Field(default="sqlite:///app/data/dropshipping_ai.db")
+    # Use Railway's DATABASE_URL if available, fallback to SQLite
+    database_url: str = Field(
+        default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./dropshipping_ai.db")
+    )
     redis_url: str = Field(default="redis://localhost:6379/0")
     
     # Automation Schedules

@@ -13,8 +13,13 @@ import os
 
 from config.settings import settings
 
-# Create database directory if it doesn't exist (for SQLite)
+# Handle Railway's DATABASE_URL format
+# Railway uses postgres:// but SQLAlchemy needs postgresql://
 db_url = settings.system.database_url
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+# Create database directory if it doesn't exist (for SQLite)
 if "sqlite" in db_url:
     db_path = db_url.replace("sqlite:///", "")
     db_dir = os.path.dirname(db_path)
@@ -23,8 +28,9 @@ if "sqlite" in db_url:
 
 Base = declarative_base()
 engine = create_engine(
-    settings.system.database_url, 
-    connect_args={"check_same_thread": False} if "sqlite" in settings.system.database_url else {}
+    db_url, 
+    connect_args={"check_same_thread": False} if "sqlite" in db_url else {},
+    pool_pre_ping=True  # Check connection before using (helps with Railway)
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

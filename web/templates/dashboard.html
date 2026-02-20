@@ -30,11 +30,20 @@
                 <button class="btn btn-primary" onclick="runResearch()">
                     🔍 Run Product Research
                 </button>
+                <button class="btn btn-primary" onclick="runResearchNoAPI()">
+                    🔍 Research (No AutoDS API)
+                </button>
                 <button class="btn btn-primary" onclick="runPricing()">
                     💰 Run Pricing Optimization
                 </button>
                 <button class="btn btn-primary" onclick="syncInventory()">
                     🔄 Sync Inventory
+                </button>
+                <button class="btn btn-success" onclick="generateTikTokContent()">
+                    🎬 Generate TikTok Content
+                </button>
+                <button class="btn btn-success" onclick="startFullAutomation()">
+                    ⚡ Start 24/7 Automation
                 </button>
             </div>
         </div>
@@ -210,6 +219,44 @@ async function createStore(event) {
         loadStats();
     } catch (e) {
         log('Store creation failed: ' + e.message);
+    }
+}
+
+async function runResearchNoAPI() {
+    log('🔍 Researching products (No AutoDS API needed)...');
+    try {
+        const response = await fetch('/api/research/no-api?niche=home%20organization&limit=20', { method: 'POST' });
+        const data = await response.json();
+        log(`✅ Found ${data.products_found} products!`);
+        log(`Top product: ${data.products?.[0]?.title || 'N/A'} (Score: ${data.products?.[0]?.ai_score})`);
+    } catch (e) {
+        log('❌ Research failed: ' + e.message);
+    }
+}
+
+async function generateTikTokContent() {
+    log('🎬 Generating TikTok content...');
+    try {
+        const response = await fetch('/api/tiktok/generate-content', { method: 'POST' });
+        const data = await response.json();
+        log(`✅ Created ${data.content_pieces} content pieces!`);
+        log(`📁 Exported to: ${data.export_file}`);
+        log('Check content_calendar.csv for your scripts!');
+    } catch (e) {
+        log('❌ Content generation failed: ' + e.message);
+    }
+}
+
+async function startFullAutomation() {
+    log('⚡ Starting 24/7 automation...');
+    try {
+        const response = await fetch('/api/full-automation/start', { method: 'POST' });
+        const data = await response.json();
+        log(`✅ ${data.message}`);
+        log('Daily schedule:');
+        data.tasks?.forEach(task => log(`  • ${task}`));
+    } catch (e) {
+        log('❌ Failed to start: ' + e.message);
     }
 }
 

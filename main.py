@@ -116,9 +116,9 @@ templates = Jinja2Templates(directory="web/templates")
 # ============ Public Routes ============
 
 @app.get("/", response_class=HTMLResponse)
-async def landing(request: Request):
-    """Landing page for SaaS promotion"""
-    return templates.TemplateResponse("landing.html", {"request": request})
+async def root_redirect(request: Request):
+    """Root redirects to dashboard (for personal use)"""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
 # ============ Dashboard Routes ============
@@ -629,10 +629,13 @@ async def resolve_exception(exception_id: int, resolution: ExceptionResolution):
 @app.post("/api/inventory/sync")
 async def sync_inventory(store_id: Optional[int] = None):
     """Manually trigger inventory sync"""
-    from automation.fulfillment_monitor import get_fulfillment_monitor
-    monitor = get_fulfillment_monitor()
-    result = await monitor.run_inventory_sync(store_id)
-    return result
+    try:
+        from automation.fulfillment_monitor import get_fulfillment_monitor
+        monitor = get_fulfillment_monitor()
+        result = await monitor.run_inventory_sync(store_id)
+        return result
+    except Exception as e:
+        return {"status": "error", "message": str(e), "stock_updates": 0}
 
 
 # ============ API Routes - AI Content ============
@@ -886,26 +889,298 @@ async def get_scheduler_jobs():
 @app.get("/api/stats")
 async def get_dashboard_stats():
     """Get dashboard statistics"""
-    from models.database import SessionLocal, Product, PriceChange, OrderException, Store
-    db = SessionLocal()
-    
-    stats = {
-        "total_products": db.query(Product).count(),
-        "active_products": db.query(Product).filter(Product.status == "active").count(),
-        "pending_products": db.query(Product).filter(Product.status == "pending_approval").count(),
-        "pending_price_changes": db.query(PriceChange).filter(PriceChange.status == "pending").count(),
-        "open_exceptions": db.query(OrderException).filter(OrderException.status == "open").count(),
-        "total_stores": db.query(Store).count()
-    }
-    
-    db.close()
-    return stats
+    try:
+        from models.database import SessionLocal, Product, PriceChange, OrderException, Store
+        db = SessionLocal()
+        
+        stats = {
+            "total_products": db.query(Product).count(),
+            "active_products": db.query(Product).filter(Product.status == "active").count(),
+            "pending_products": db.query(Product).filter(Product.status == "pending_approval").count(),
+            "pending_price_changes": db.query(PriceChange).filter(PriceChange.status == "pending").count(),
+            "open_exceptions": db.query(OrderException).filter(OrderException.status == "open").count(),
+            "total_stores": db.query(Store).count()
+        }
+        
+        db.close()
+        return stats
+    except Exception as e:
+        # Return empty stats if database not ready
+        return {
+            "total_products": 0,
+            "active_products": 0,
+            "pending_products": 0,
+            "pending_price_changes": 0,
+            "open_exceptions": 0,
+            "total_stores": 0,
+            "error": str(e)
+        }
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "version": "1.0.0"}
+    """Health check endpoint with database verification"""
+    import os
+    
+    # Check environment
+    shop_url = os.getenv("SHOPIFY_SHOP_URL", "")
+    has_credentials = bool(os.getenv("SHOPIFY_ACCESS_TOKEN") or 
+                          (os.getenv("SHOPIFY_API_KEY") and os.getenv("SHOPIFY_API_SECRET")))
+    
+    # Check database
+    db_status = "ok"
+    try:
+        from models.database import SessionLocal
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {
+        "status": "healthy" if db_status == "ok" else "degraded",
+        "version": "1.0.0",
+        "database": db_status,
+        "shopify_configured": bool(shop_url),
+        "shopify_credentials": has_credentials,
+        "mode": "FULL" if has_credentials else "SETUP_REQUIRED"
+    }
+
+
+# ============ NEW: Full Automation Routes (NO AutoDS API Needed) ============
+
+@app.post("/api/full-automation/setup")
+async def full_automation_setup():
+    """
+    Complete setup for fully automated operation
+    No AutoDS API required - uses browser automation instead
+    """
+    from automation.full_automation import get_full_automation
+    auto = get_full_automation()
+    result = await auto.run_full_setup()
+    return result
+
+
+@app.post("/api/full-automation/start")
+async def start_full_automation():
+    """
+    Start the 24/7 automation scheduler
+    Runs: product research, pricing, inventory sync, content creation
+    """
+    from automation.full_automation import get_full_automation
+    import threading
+    
+    auto = get_full_automation()
+    
+    # Run scheduler in background thread
+    def run_scheduler():
+        asyncio.run(auto.start_scheduler())
+    
+    thread = threading.Thread(target=run_scheduler, daemon=True)
+    thread.start()
+    
+    return {
+        "status": "started",
+        "message": "Full automation scheduler running in background",
+        "tasks": [
+            "Daily product research at 09:00",
+            "Daily product import at 10:00",
+            "Daily pricing optimization at 14:00",
+            "Daily TikTok content at 20:00",
+            "Hourly inventory sync",
+            "Order monitoring every 2 hours"
+        ]
+    }
+
+
+@app.get("/api/full-automation/status")
+async def get_automation_status():
+    """Get current automation status"""
+    from automation.full_automation import get_full_automation
+    auto = get_full_automation()
+    return auto.get_status()
+
+
+@app.post("/api/full-automation/run-now")
+async def run_all_automation_now():
+    """Run all automation tasks immediately (for testing)"""
+    from automation.full_automation import get_full_automation
+    auto = get_full_automation()
+    result = await auto.run_all_now()
+    return result
+
+
+# ============ NEW: TikTok Content Engine Routes ============
+
+@app.post("/api/tiktok/generate-content")
+async def generate_tiktok_content(store_id: Optional[int] = None):
+    """
+    Generate complete TikTok content calendar for all products
+    Creates scripts, hooks, CTAs, and hashtags
+    """
+    from automation.tiktok_content_engine import get_tiktok_content_engine
+    engine = get_tiktok_content_engine()
+    
+    result = await engine.auto_create_content_for_store()
+    return result
+
+
+@app.post("/api/tiktok/product-script")
+async def generate_product_script(product_id: int, content_type: str = "product_demo"):
+    """Generate a TikTok script for a specific product"""
+    from automation.tiktok_content_engine import get_tiktok_content_engine
+    from models.database import SessionLocal, Product
+    
+    db = SessionLocal()
+    product = db.query(Product).filter(Product.id == product_id).first()
+    db.close()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    engine = get_tiktok_content_engine()
+    
+    product_data = {
+        "title": product.title,
+        "price": f"${product.selling_price}",
+        "description": product.description or ""
+    }
+    
+    script = await engine.generate_product_script(product_data, content_type)
+    return {
+        "product_id": product_id,
+        "product_title": product.title,
+        "content_type": content_type,
+        "script": script
+    }
+
+
+@app.get("/api/tiktok/export-calendar")
+async def export_content_calendar():
+    """Export the content calendar to CSV"""
+    from automation.tiktok_content_engine import get_tiktok_content_engine
+    engine = get_tiktok_content_engine()
+    engine.export_calendar_to_csv()
+    return {"message": "Content calendar exported to content_calendar.csv"}
+
+
+# ============ NEW: No-API Product Research Routes ============
+
+@app.post("/api/research/no-api")
+async def research_products_no_api(niche: str = "home organization", limit: int = 20):
+    """
+    Research trending products WITHOUT AutoDS API
+    Uses web scraping + AI analysis
+    """
+    try:
+        from automation.product_research_no_api import get_product_research_no_api
+        research = get_product_research_no_api()
+        
+        products = await research.research_trending_products(niche, limit)
+        
+        return {
+            "niche": niche,
+            "products_found": len(products),
+            "products": [
+                {
+                    "title": p.title,
+                    "supplier": p.supplier,
+                    "cost_price": p.cost_price,
+                    "suggested_price": p.suggested_price,
+                    "profit_margin": round((p.suggested_price - p.cost_price) / p.suggested_price * 100, 1),
+                    "shipping_days": p.shipping_days,
+                    "rating": p.rating,
+                    "order_count": p.order_count,
+                    "ai_score": p.ai_score,
+                    "ai_recommendation": p.ai_analysis.get("recommendation") if p.ai_analysis else None,
+                    "supplier_url": p.supplier_url
+                }
+                for p in products
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e), "products_found": 0, "products": []}
+
+
+@app.post("/api/research/export-report")
+async def export_research_report(niche: str = "home organization"):
+    """Export product research report to JSON"""
+    from automation.product_research_no_api import get_product_research_no_api
+    research = get_product_research_no_api()
+    
+    products = await research.research_trending_products(niche)
+    filename = research.export_research_report(products)
+    
+    return {
+        "message": "Research report exported",
+        "filename": filename,
+        "products_researched": len(products)
+    }
+
+
+@app.post("/api/research/analyze-competitor")
+async def analyze_competitor_store(store_url: str):
+    """
+    Analyze a competitor's Shopify store for product ideas
+    Note: Only analyzes publicly available data
+    """
+    from automation.product_research_no_api import get_product_research_no_api
+    research = get_product_research_no_api()
+    
+    result = await research.analyze_competitor_store(store_url)
+    return result
+
+
+# ============ NEW: AutoDS Browser Automation Routes ============
+
+@app.post("/api/autods/browser-login")
+async def autods_browser_login(headless: bool = False):
+    """
+    Login to AutoDS using browser automation (no API needed)
+    May require manual 2FA completion
+    """
+    from api_clients.autods_browser_client import get_browser_client
+    
+    try:
+        client = await get_browser_client()
+        await client.start(headless=headless)
+        success = await client.login()
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "Logged into AutoDS via browser",
+                "note": "Browser automation is now ready"
+            }
+        else:
+            return {
+                "status": "manual_intervention_required",
+                "message": "Please complete 2FA in the browser window",
+                "instruction": "Complete login manually, then browser automation will be available"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/autods/import-product")
+async def import_product_browser(supplier_url: str, title: str, price: float):
+    """
+    Import a product using browser automation
+    Works without AutoDS API!
+    """
+    from api_clients.autods_browser_client import get_browser_client
+    
+    client = await get_browser_client()
+    
+    if not client.logged_in:
+        raise HTTPException(status_code=400, detail="Not logged in. Call /api/autods/browser-login first")
+    
+    result = await client.import_product_from_url(
+        supplier_url=supplier_url,
+        product_data={"title": title, "price": price}
+    )
+    
+    return result
 
 
 if __name__ == "__main__":
