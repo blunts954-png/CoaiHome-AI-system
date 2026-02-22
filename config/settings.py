@@ -7,6 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional, List
 from functools import lru_cache
+from dotenv import load_dotenv
+
+# Explicitly load .env file before defining settings
+load_dotenv(override=True)
 
 
 class ShopifyConfig(BaseSettings):

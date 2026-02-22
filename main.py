@@ -920,22 +920,31 @@ async def get_dashboard_stats():
 @app.get("/health")
 async def health_check():
     """Health check endpoint with database verification"""
-    import os
+    from sqlalchemy import text
     
-    # Check environment
-    shop_url = os.getenv("SHOPIFY_SHOP_URL", "")
-    has_credentials = bool(os.getenv("SHOPIFY_ACCESS_TOKEN") or 
-                          (os.getenv("SHOPIFY_API_KEY") and os.getenv("SHOPIFY_API_SECRET")))
+    # Check configuration from settings (which loads from .env)
+    shop_url = settings.shopify.shop_url
+    has_credentials = bool(settings.shopify.access_token or 
+                          (settings.shopify.api_key and settings.shopify.api_secret))
+    has_ai = bool(settings.ai.api_key and settings.ai.api_key != "your_openai_api_key_here")
     
     # Check database
     db_status = "ok"
     try:
         from models.database import SessionLocal
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
     except Exception as e:
         db_status = f"error: {str(e)}"
+    
+    # Determine mode
+    if has_credentials and has_ai:
+        mode = "FULL"
+    elif has_credentials:
+        mode = "SHOPIFY_ONLY"
+    else:
+        mode = "SETUP_REQUIRED"
     
     return {
         "status": "healthy" if db_status == "ok" else "degraded",
@@ -943,7 +952,9 @@ async def health_check():
         "database": db_status,
         "shopify_configured": bool(shop_url),
         "shopify_credentials": has_credentials,
-        "mode": "FULL" if has_credentials else "SETUP_REQUIRED"
+        "ai_configured": has_ai,
+        "mode": mode,
+        "store": settings.store.brand_name or "Not configured"
     }
 
 
