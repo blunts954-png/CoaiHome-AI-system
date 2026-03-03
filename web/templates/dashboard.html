@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 
 {% block extra_css %}
@@ -210,7 +209,8 @@
                 <button class="btn btn-success" onclick="generateTikTokContent()">
                     📱 Create TikTok Scripts
                 </button>
-                <button class="btn btn-success" onclick="startFullAutomation()" style="background: var(--success-gradient); color: white; border: none;">
+                <button class="btn btn-success" onclick="startFullAutomation()"
+                    style="background: var(--success-gradient); color: white; border: none;">
                     ⚡ ACTIVATE 24/7 AUTOMATION
                 </button>
                 <a href="/products" class="btn btn-secondary" id="products-link">
@@ -226,7 +226,8 @@
             <button class="btn btn-sm btn-secondary" style="width: auto;" onclick="clearLog()">Clear</button>
         </div>
         <div class="card-body" style="flex: 1; padding: 0;">
-            <div id="system-log" style="height: 350px; overflow-y: auto; background: #0f172a; color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 1.25rem;">
+            <div id="system-log"
+                style="height: 350px; overflow-y: auto; background: #0f172a; color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 1.25rem;">
                 <div>[SYSTEM] Initialized. Awaiting command...</div>
             </div>
         </div>
@@ -238,7 +239,8 @@
         <h2>🛠️ Backend Monitors</h2>
     </div>
     <div class="card-body">
-        <div id="system-status" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.85rem; color: #64748b;">
+        <div id="system-status"
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.85rem; color: #64748b;">
             <div>Loading connectivity status...</div>
         </div>
     </div>
@@ -247,143 +249,160 @@
 
 {% block extra_js %}
 <script>
-async function apiRequest(url, options = {}) {
-    try {
-        const response = await fetch(url, options);
-        let data = await response.json();
-        if (!response.ok) throw new Error(data.detail || data.message || 'API Error');
-        return data;
-    } catch (error) {
-        log('Error: ' + error.message);
-        throw error;
-    }
-}
-
-async function loadStats() {
-    try {
-        const data = await apiRequest('/api/stats');
-        document.getElementById('active-products').textContent = data.active_products || 0;
-        document.getElementById('pending-products').textContent = data.pending_products || 0;
-        document.getElementById('pending-pricing').textContent = data.pending_price_changes || 0;
-        document.getElementById('open-exceptions').textContent = data.open_exceptions || 0;
-        
-        const productsLink = document.getElementById('products-link');
-        if (data.active_products > 0) {
-            productsLink.innerHTML = `🛍️ Browse Local Catalog (${data.active_products} Live)`;
+    async function apiRequest(url, options = {}) {
+        try {
+            const response = await fetch(url, options);
+            let data = await response.json();
+            if (!response.ok) throw new Error(data.detail || data.message || 'API Error');
+            return data;
+        } catch (error) {
+            log('Error: ' + error.message);
+            throw error;
         }
-    } catch (e) {}
-}
-
-async function syncWithShopify() {
-    log('Pinging Shopify for data sync...');
-    try {
-        const data = await apiRequest('/api/system/sync-shopify', { method: 'POST' });
-        log(data.message);
-    } catch (e) {
-        log('Sync failed: ' + e.message);
     }
-}
 
-async function buildStore() {
-    if (!confirm('This will trigger the full AI Store Builder. It will research products, build pages, and configure your theme. Continue?')) return;
-    log('INITIATING FULL STORE BUILD...');
-    try {
-        const data = await apiRequest('/api/stores/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                niche: "home organization",
-                brand_name: "CoaiHome",
-                brand_tone: "luxury"
-            })
-        });
-        log(data.message);
-    } catch (e) {
-        log('Build failed: ' + e.message);
+    async function loadStats() {
+        try {
+            const data = await apiRequest('/api/stats');
+            document.getElementById('active-products').textContent = data.active_products || 0;
+            document.getElementById('pending-products').textContent = data.pending_products || 0;
+            document.getElementById('pending-pricing').textContent = data.pending_price_changes || 0;
+            document.getElementById('open-exceptions').textContent = data.open_exceptions || 0;
+
+            const productsLink = document.getElementById('products-link');
+            if (data.active_products > 0) {
+                productsLink.innerHTML = `🛍️ Browse Local Catalog (${data.active_products} Live)`;
+            }
+        } catch (e) { }
     }
-}
 
-async function runResearch() {
-    log('Searching for winning products in your niche...');
-    try {
-        const data = await apiRequest('/api/research/run?store_id=1', { method: 'POST' });
-        log('Research in progress. New products will appear in Research Queue.');
-    } catch (e) { log('Research error: ' + e.message); }
-}
+    async function syncWithShopify() {
+        log('Pinging Shopify for data sync...');
+        try {
+            const data = await apiRequest('/api/system/sync-shopify', { method: 'POST' });
+            log(data.message);
+        } catch (e) {
+            log('Sync failed: ' + e.message);
+        }
+    }
 
-async function runResearchNoAPI() {
-    log('Quick-sourcing products from AI catalog...');
-    try {
-        const data = await apiRequest('/api/research/no-api?niche=home%20organization&limit=20', { method: 'POST' });
-        log('Imported ' + data.products_found + ' products for approval.');
-        loadStats();
-    } catch (e) { log('Quick import error: ' + e.message); }
-}
+    async function buildStore() {
+        if (!confirm('This will trigger the full AI Store Builder. It will research products, build pages, and configure your theme. Continue?')) return;
+        log('INITIATING FULL STORE BUILD...');
+        try {
+            const data = await apiRequest('/api/stores/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    niche: "home organization",
+                    brand_name: "CoaiHome",
+                    brand_tone: "luxury"
+                })
+            });
+            log(data.message);
+        } catch (e) {
+            log('Build failed: ' + e.message);
+        }
+    }
 
-async function runPricing() {
-    log('Analyzing market trends and optimizing prices...');
-    try {
-        const data = await apiRequest('/api/pricing/optimize', { method: 'POST' });
-        log('Analysis complete. Check Price Suggestions.');
-        loadStats();
-    } catch (e) { log('Pricing error: ' + e.message); }
-}
+    async function runResearch() {
+        log('Searching for winning products in your niche...');
+        try {
+            const data = await apiRequest('/api/research/run?store_id=1', { method: 'POST' });
+            log('Research in progress. New products will appear in Research Queue.');
+        } catch (e) { log('Research error: ' + e.message); }
+    }
 
-async function syncInventory() {
-    log('Verifying stock levels with suppliers...');
-    try {
-        await apiRequest('/api/inventory/sync', { method: 'POST' });
-        log('Stock sync complete.');
-    } catch (e) { log('Inventory error: ' + e.message); }
-}
+    async function runResearchNoAPI() {
+        log('Quick-sourcing products from AI catalog...');
+        try {
+            const data = await apiRequest('/api/research/no-api?niche=home%20organization&limit=20', { method: 'POST' });
+            log('Imported ' + data.products_found + ' products for approval.');
+            loadStats();
+        } catch (e) { log('Quick import error: ' + e.message); }
+    }
 
-async function generateTikTokContent() {
-    log('Generating viral content scripts...');
-    try {
-        const data = await apiRequest('/api/tiktok/generate-content', { method: 'POST' });
-        log('Scripts ready! Check content_calendar.csv');
-    } catch (e) { log('TikTok error: ' + e.message); }
-}
+    async function runPricing() {
+        log('Analyzing market trends and optimizing prices...');
+        try {
+            const data = await apiRequest('/api/pricing/optimize', { method: 'POST' });
+            log('Analysis complete. Check Price Suggestions.');
+            loadStats();
+        } catch (e) { log('Pricing error: ' + e.message); }
+    }
 
-async function startFullAutomation() {
-    log('ACTIVATING 24/7 AUTOPILOT...');
-    try {
-        const data = await apiRequest('/api/full-automation/start', { method: 'POST' });
-        log('Automation online. Jake is now managing your store.');
-    } catch (e) { log('Activation error: ' + e.message); }
-}
+    async function syncInventory() {
+        log('Verifying stock levels with suppliers...');
+        try {
+            await apiRequest('/api/inventory/sync', { method: 'POST' });
+            log('Stock sync complete.');
+        } catch (e) { log('Inventory error: ' + e.message); }
+    }
 
-async function loadSystemStatus() {
-    try {
-        const data = await apiRequest('/api/system/status');
-        const statusDiv = document.getElementById('system-status');
-        statusDiv.innerHTML = `
+    async function generateTikTokContent() {
+        log('Generating viral content scripts...');
+        try {
+            const data = await apiRequest('/api/tiktok/generate-content', { method: 'POST' });
+            log('Scripts ready! Check content_calendar.csv');
+        } catch (e) { log('TikTok error: ' + e.message); }
+    }
+
+    async function startFullAutomation() {
+        log('ACTIVATING 24/7 AUTOPILOT...');
+        try {
+            const data = await apiRequest('/api/full-automation/start', { method: 'POST' });
+            log('Automation online. Jake is now managing your store.');
+        } catch (e) { log('Activation error: ' + e.message); }
+    }
+
+    async function loadSystemStatus() {
+        try {
+            const data = await apiRequest('/api/system/status');
+            const statusDiv = document.getElementById('system-status');
+            statusDiv.innerHTML = `
             <div><strong>Shopify:</strong> ${data.shopify_connected ? '🟢 Connected' : '🔴 Outage'}</div>
             <div><strong>Database:</strong> 🟢 Online</div>
             <div><strong>Sync Status:</strong> Ready</div>
             <div><strong>Engine:</strong> ${data.mode}</div>
         `;
-    } catch (e) {}
-}
 
-function log(message) {
-    const logDiv = document.getElementById('system-log');
-    const time = new Date().toLocaleTimeString();
-    const entry = document.createElement('div');
-    entry.style.padding = '2px 0';
-    entry.innerHTML = `<span style="color: #64748b;">[${time}]</span> ${message}`;
-    logDiv.appendChild(entry);
-    logDiv.scrollTop = logDiv.scrollHeight;
-}
+            // Also load DB logs
+            const logData = await apiRequest('/api/system/logs');
+            if (logData.logs && logData.logs.length > 0) {
+                const logDiv = document.getElementById('system-log');
+                // Only update if we have new logs
+                // For simplicity, we just clear and re-render the last 20
+                logDiv.innerHTML = '';
+                logData.logs.reverse().forEach(l => {
+                    const entry = document.createElement('div');
+                    entry.style.padding = '2px 0';
+                    const color = l.status === 'failed' ? '#f87171' : (l.status === 'pending' ? '#fbbf24' : '#38bdf8');
+                    entry.innerHTML = `<span style="color: #64748b;">[${l.timestamp}]</span> <span style="color: ${color};">[${l.type.toUpperCase()}]</span> ${l.message}`;
+                    logDiv.appendChild(entry);
+                });
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        } catch (e) { }
+    }
 
-function clearLog() {
-    document.getElementById('system-log').innerHTML = '<div>[SYSTEM] Log cleared.</div>';
-}
+    function log(message) {
+        const logDiv = document.getElementById('system-log');
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.style.padding = '2px 0';
+        entry.innerHTML = `<span style="color: #64748b;">[${time}]</span> ${message}`;
+        logDiv.appendChild(entry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
 
-// Init
-loadStats();
-loadSystemStatus();
-setInterval(loadStats, 15000);
-log('Jake Control Panel v2.0 ready.');
+    function clearLog() {
+        document.getElementById('system-log').innerHTML = '<div>[SYSTEM] Log cleared.</div>';
+    }
+
+    // Init
+    loadStats();
+    loadSystemStatus();
+    setInterval(loadStats, 15000);
+    log('Jake Control Panel v2.0 ready.');
 </script>
 {% endblock %}

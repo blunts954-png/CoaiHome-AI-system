@@ -310,6 +310,43 @@ async def sync_shopify_data(background_tasks: BackgroundTasks):
     return {"status": "started", "message": "Synchronization with Shopify started in background."}
 
 
+@app.get("/api/system/logs")
+async def get_system_logs(limit: int = 20):
+    """Get recent system logs for the dashboard"""
+    from models.database import SessionLocal, SystemLog
+    db = SessionLocal()
+    logs = db.query(SystemLog).order_by(SystemLog.timestamp.desc()).limit(limit).all()
+    db.close()
+    
+    return {
+        "logs": [
+            {
+                "timestamp": l.timestamp.strftime("%H:%M:%S"),
+                "type": l.action_type,
+                "status": l.status,
+                "message": l.ai_response or l.error_message or "No details"
+            }
+            for l in logs
+        ]
+    }
+
+
+@app.get("/reset")
+@app.post("/api/system/reset")
+async def system_reset():
+    """Hard reset for the system - clears logs and re-initializes status"""
+    from models.database import SessionLocal, SystemLog, init_db
+    from automation.logger import log_action
+    
+    # 1. Ensure DB tables exist
+    init_db()
+    
+    # 2. Add reset log
+    log_action("system_reset", "system", "all", "success", "System Hard Reset requested. All operations cleared.")
+    
+    return RedirectResponse(url="/dashboard?reset=success")
+
+
 @app.get("/api/stores")
 
 async def list_stores():
