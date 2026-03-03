@@ -301,7 +301,17 @@ async def create_store(spec: StoreSpec, background_tasks: BackgroundTasks):
 
 
 
+@app.post("/api/system/sync-shopify")
+async def sync_shopify_data(background_tasks: BackgroundTasks):
+    """Manually trigger a sync from Shopify to local DB"""
+    from sync_shopify_to_db import sync_products
+    # Run in background to avoid timeout
+    background_tasks.add_task(sync_products)
+    return {"status": "started", "message": "Synchronization with Shopify started in background."}
+
+
 @app.get("/api/stores")
+
 async def list_stores():
     """List all stores"""
     from models.database import SessionLocal, Store
