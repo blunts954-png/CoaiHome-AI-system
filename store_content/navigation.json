@@ -1,0 +1,54 @@
+{
+  "main_menu": [
+    {
+      "title": "Home",
+      "url": "/"
+    },
+    {
+      "title": "Shop All",
+      "url": "/collections/all"
+    },
+    {
+      "title": "Kitchen",
+      "url": "/collections/kitchen"
+    },
+    {
+      "title": "Bathroom",
+      "url": "/collections/bathroom"
+    },
+    {
+      "title": "Closet",
+      "url": "/collections/closet"
+    },
+    {
+      "title": "Office",
+      "url": "/collections/office"
+    },
+    {
+      "title": "About Us",
+      "url": "/pages/about-us"
+    },
+    {
+      "title": "Contact",
+      "url": "/pages/contact"
+    }
+  ],
+  "footer_menu": [
+    {
+      "title": "Shipping & Returns",
+      "url": "/pages/shipping-returns"
+    },
+    {
+      "title": "FAQ",
+      "url": "/pages/faq"
+    },
+    {
+      "title": "Privacy Policy",
+      "url": "/pages/privacy-policy"
+    },
+    {
+      "title": "Terms of Service",
+      "url": "/pages/terms-of-service"
+    }
+  ]
+}

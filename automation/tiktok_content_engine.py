@@ -200,7 +200,7 @@ class TikTokContentEngine:
         
         hook = "Stop doing this 👇"
         
-        script = f""
+        script = f"""
 [0-3s] {hook} + show the frustrating old way
 [3-8s] Problem demonstration
 [8-12s] "Instead, try this:" + reveal product
@@ -382,10 +382,15 @@ class TikTokContentEngine:
             return
         
         with open(filename, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                'day', 'date', 'post_time', 'content_type', 'product',
-                'hook', 'script', 'cta', 'hashtags', 'caption', 'status'
-            ])
+            writer = csv.DictWriter(
+                f,
+                fieldnames=[
+                    'day', 'date', 'post_time', 'content_type', 'product',
+                    'hook', 'script', 'cta', 'hashtags', 'caption',
+                    'text_overlay', 'status'
+                ],
+                extrasaction='ignore'
+            )
             writer.writeheader()
             for item in self.content_calendar:
                 # Convert lists to strings for CSV

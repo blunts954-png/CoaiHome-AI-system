@@ -17,6 +17,7 @@ from automation.product_research_no_api import get_product_research_no_api
 from automation.tiktok_content_engine import get_tiktok_content_engine
 from automation.pricing_engine import get_pricing_engine
 from automation.fulfillment_monitor import get_fulfillment_monitor
+from automation.utils import _safe_print, get_async_runner
 from config.settings import settings
 
 
@@ -54,7 +55,10 @@ class FullAutomation:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] {message}"
         self.logs.append(log_entry)
-        print(log_entry)
+        try:
+            print(log_entry)
+        except UnicodeEncodeError:
+            print(log_entry.encode("ascii", "replace").decode("ascii"))
     
     # ============================================================
     # SETUP & CONFIGURATION
@@ -215,9 +219,9 @@ class FullAutomation:
         self._log("💰 Running pricing optimization...")
         
         try:
-            result = await self.pricing.optimize_all_products()
+            result = await self.pricing.run_pricing_optimization()
             
-            changes = result.get('optimized', 0)
+            changes = result.get('applied', 0) + result.get('pending_approval', 0)
             self._log(f"✅ Optimized pricing for {changes} products")
             
             return result
@@ -333,8 +337,14 @@ class FullAutomation:
             self.stop_scheduler()
     
     def _run_async_task(self, task):
-        """Helper to run async tasks in scheduler"""
-        asyncio.create_task(task())
+        """Helper to run async tasks in scheduler using persistent event loop"""
+        try:
+            async_runner = get_async_runner()
+            if not async_runner._running:
+                async_runner.start()
+            async_runner.run_task(task())
+        except Exception as e:
+            self._log(f"❌ Scheduled task failed: {e}")
     
     def stop_scheduler(self):
         """Stop the automation scheduler"""

@@ -12,6 +12,7 @@ from config.settings import settings
 from automation.product_research import get_product_research
 from automation.pricing_engine import get_pricing_engine
 from automation.fulfillment_monitor import get_fulfillment_monitor
+from automation.utils import _safe_print
 from services.notification_service import get_notification_service
 
 
@@ -27,15 +28,15 @@ class AutomationScheduler:
             self.notifications = get_notification_service()
             self.enabled = True
         except Exception as e:
-            print(f"⚠️  Scheduler initialization warning: {e}")
-            print("⚠️  Running in limited mode - some features disabled")
+            _safe_print(f"⚠️  Scheduler initialization warning: {e}")
+            _safe_print("⚠️  Running in limited mode - some features disabled")
             self.enabled = False
     
     def setup_jobs(self):
         """Configure all scheduled jobs"""
         
         # Product Research - Daily
-        if settings.autods.auto_import_enabled:
+        if settings.cj.auto_import_enabled:
             self.scheduler.add_job(
                 self._run_product_research,
                 IntervalTrigger(hours=settings.system.product_research_interval_hours),
@@ -43,10 +44,10 @@ class AutomationScheduler:
                 name="AI Product Research",
                 replace_existing=True
             )
-            print(f"📅 Scheduled product research every {settings.system.product_research_interval_hours} hours")
+            _safe_print(f"📅 Scheduled product research every {settings.system.product_research_interval_hours} hours")
         
         # Pricing Optimization - Daily
-        if settings.autods.auto_pricing_enabled:
+        if settings.cj.auto_pricing_enabled:
             self.scheduler.add_job(
                 self._run_pricing_optimization,
                 IntervalTrigger(hours=settings.system.pricing_check_interval_hours),
@@ -54,7 +55,7 @@ class AutomationScheduler:
                 name="AI Pricing Optimization",
                 replace_existing=True
             )
-            print(f"📅 Scheduled pricing optimization every {settings.system.pricing_check_interval_hours} hours")
+            _safe_print(f"📅 Scheduled pricing optimization every {settings.system.pricing_check_interval_hours} hours")
         
         # Inventory Sync - Every 30 minutes
         self.scheduler.add_job(
@@ -64,7 +65,7 @@ class AutomationScheduler:
             name="Inventory Synchronization",
             replace_existing=True
         )
-        print(f"📅 Scheduled inventory sync every {settings.system.inventory_check_interval_minutes} minutes")
+        _safe_print(f"📅 Scheduled inventory sync every {settings.system.inventory_check_interval_minutes} minutes")
         
         # Fulfillment Exception Check - Every 15 minutes
         self.scheduler.add_job(
@@ -74,7 +75,7 @@ class AutomationScheduler:
             name="Fulfillment Exception Check",
             replace_existing=True
         )
-        print("📅 Scheduled fulfillment exception check every 15 minutes")
+        _safe_print("📅 Scheduled fulfillment exception check every 15 minutes")
         
         # Supplier Performance - Daily at 2 AM
         self.scheduler.add_job(
@@ -84,7 +85,7 @@ class AutomationScheduler:
             name="Supplier Performance Analysis",
             replace_existing=True
         )
-        print("📅 Scheduled supplier performance check daily at 2:00 AM")
+        _safe_print("📅 Scheduled supplier performance check daily at 2:00 AM")
         
         # Daily Summary - Daily at 8 AM
         self.scheduler.add_job(
@@ -94,37 +95,37 @@ class AutomationScheduler:
             name="Daily Summary Report",
             replace_existing=True
         )
-        print("📅 Scheduled daily summary at 8:00 AM")
+        _safe_print("📅 Scheduled daily summary at 8:00 AM")
     
     async def _run_product_research(self):
         """Run product research job"""
-        print(f"🔍 Running scheduled product research at {datetime.now()}")
+        _safe_print(f"🔍 Running scheduled product research at {datetime.now()}")
         # In production, you'd iterate through all active stores
         result = await self.product_research.run_research_job(store_id=1)
-        print(f"Product research completed: {result}")
+        _safe_print(f"Product research completed: {result}")
     
     async def _run_pricing_optimization(self):
         """Run pricing optimization job"""
-        print(f"💰 Running scheduled pricing optimization at {datetime.now()}")
+        _safe_print(f"💰 Running scheduled pricing optimization at {datetime.now()}")
         result = await self.pricing_engine.run_pricing_optimization()
-        print(f"Pricing optimization completed: {result}")
+        _safe_print(f"Pricing optimization completed: {result}")
     
     async def _run_inventory_sync(self):
         """Run inventory synchronization"""
-        print(f"🔄 Running inventory sync at {datetime.now()}")
+        _safe_print(f"🔄 Running inventory sync at {datetime.now()}")
         result = await self.fulfillment_monitor.run_inventory_sync()
-        print(f"Inventory sync completed: {result}")
+        _safe_print(f"Inventory sync completed: {result}")
     
     async def _check_fulfillment_exceptions(self):
         """Check for fulfillment exceptions"""
         result = await self.fulfillment_monitor.check_fulfillment_exceptions()
-        print(f"Fulfillment check completed: {result}")
+        _safe_print(f"Fulfillment check completed: {result}")
     
     async def _update_supplier_performance(self):
         """Update supplier performance metrics"""
-        print(f"📊 Running supplier performance analysis at {datetime.now()}")
+        _safe_print(f"📊 Running supplier performance analysis at {datetime.now()}")
         result = await self.fulfillment_monitor.update_supplier_performance()
-        print(f"Supplier analysis completed: {result}")
+        _safe_print(f"Supplier analysis completed: {result}")
     
     async def _send_daily_summary(self):
         """Send daily summary report"""
@@ -143,14 +144,14 @@ class AutomationScheduler:
     def start(self):
         """Start the scheduler"""
         if not self.enabled:
-            print("⚠️  Scheduler disabled - running in limited mode")
+            _safe_print("⚠️  Scheduler disabled - running in limited mode")
             return
         try:
             self.setup_jobs()
             self.scheduler.start()
-            print("✅ Automation scheduler started")
+            _safe_print("✅ Automation scheduler started")
         except Exception as e:
-            print(f"⚠️  Could not start scheduler: {e}")
+            _safe_print(f"⚠️  Could not start scheduler: {e}")
     
     def stop(self):
         """Stop the scheduler"""
@@ -158,7 +159,7 @@ class AutomationScheduler:
             return
         try:
             self.scheduler.shutdown()
-            print("⏹️ Automation scheduler stopped")
+            _safe_print("⏹️ Automation scheduler stopped")
         except:
             pass
     

@@ -1,0 +1,20 @@
+/* CoaiHome - Psychological Theme (Condensed for Shopify) */
+:root{--trust:#2563EB;--action:#F97316;--money:#10B981;--dark:#1A1A2E;--light:#F5F5F5}
+.site-header{background:linear-gradient(135deg,var(--trust) 0%,#1D4ED8 100%)}
+.btn-primary,.add-to-cart,.shop-now{background:var(--action)!important;color:#fff!important;border:none!important;border-radius:8px!important;padding:14px 32px!important;font-weight:600!important;text-transform:uppercase!important;box-shadow:0 4px 6px rgba(249,115,22,.3)!important;transition:all .3s!important}
+.btn-primary:hover{background:#EA580C!important;transform:translateY(-2px)!important}
+.checkout-button{background:var(--money)!important;color:#fff!important;padding:16px 40px!important;font-size:18px!important;font-weight:700!important;border-radius:8px!important;box-shadow:0 4px 6px rgba(16,185,129,.3)!important}
+.product-card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);transition:all .3s}
+.product-card:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.product-price{color:var(--action);font-size:20px;font-weight:700}
+.compare-price{color:#6B7280;text-decoration:line-through;margin-left:8px}
+.scarcity-badge{background:#FEE2E2;color:#DC2626;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:700;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+.sale-badge{background:var(--action);color:#fff;padding:6px 12px;border-radius:4px;font-size:13px;font-weight:700}
+.trust-bar{background:var(--light);padding:12px 0;text-align:center}
+.countdown-timer{background:#FEF3C7;color:#92400E;padding:12px 20px;border-radius:8px;font-weight:700;display:inline-block}
+.current-price{color:var(--action);font-size:24px;font-weight:700}
+.savings{background:var(--money);color:#fff;padding:4px 10px;border-radius:20px;font-size:13px;font-weight:600}
+.hero-headline{color:var(--dark);font-size:42px;font-weight:700;line-height:1.2}
+@media(max-width:768px){.hero-headline{font-size:28px}.btn-primary{width:100%;padding:16px!important;font-size:18px!important}}
+.sticky-add-to-cart{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:12px;box-shadow:0 -4px 12px rgba(0,0,0,.1);z-index:999;display:flex;gap:12px}

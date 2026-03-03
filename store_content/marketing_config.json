@@ -1,0 +1,50 @@
+{
+  "email_marketing": {
+    "welcome_series": [
+      {
+        "delay": "immediate",
+        "subject": "Welcome to CoaiHome - Here's 10% Off!",
+        "template": "welcome_email"
+      },
+      {
+        "delay": "3_days",
+        "subject": "Your Home Deserves This",
+        "template": "education_email"
+      },
+      {
+        "delay": "7_days",
+        "subject": "Last Chance: 10% Off Expires Tonight",
+        "template": "urgency_email"
+      }
+    ]
+  },
+  "abandoned_cart": {
+    "enabled": true,
+    "reminder_1": {
+      "delay": "1_hour",
+      "discount": null
+    },
+    "reminder_2": {
+      "delay": "24_hours",
+      "discount": "10%"
+    }
+  },
+  "social_media": {
+    "tiktok": {
+      "posting_schedule": "Daily at 7PM EST",
+      "content_types": [
+        "product_demo",
+        "transformation",
+        "tips"
+      ]
+    },
+    "instagram": {
+      "posting_schedule": "3x per week",
+      "content_types": [
+        "lifestyle",
+        "before_after",
+        "customer_features"
+      ]
+    }
+  }
+}

@@ -19,9 +19,6 @@ redis>=5.0.1
 openai>=1.12.0
 anthropic>=0.18.0
 
-# Shopify API - may need manual install if issues persist
-# ShopifyAPI>=12.4.0
-
 # Utilities
 pydantic[email]
 python-dateutil>=2.8.2

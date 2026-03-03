@@ -8,6 +8,11 @@ import os
 import time
 import webbrowser
 
+from automation.utils import _configure_utf8_console
+
+_configure_utf8_console()
+
+
 def check_env_file():
     """Check if .env file exists"""
     if not os.path.exists('.env'):

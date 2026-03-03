@@ -5,6 +5,12 @@ Run this to set up the database and verify configuration
 import sys
 from pathlib import Path
 
+from automation.utils import _configure_utf8_console
+
+
+_configure_utf8_console()
+
+
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -23,9 +29,14 @@ def check_config():
     if not settings.shopify.access_token:
         errors.append("SHOPIFY_ACCESS_TOKEN is required")
     
-    # Check AutoDS config
-    if not settings.autods.api_key:
-        errors.append("AUTODS_API_KEY is required")
+    # Supplier platform config (CJ only now)
+    supplier_preference = (settings.system.supplier_platform or "cj").lower()
+    has_supplier_api = bool(settings.cj.api_token)
+    if supplier_preference == "cj" and not has_supplier_api:
+        warnings.append(
+            "No supplier API configured (AUTODS_API_KEY/CJ_API_TOKEN). "
+            "System will run in SHOPIFY-ONLY mode."
+        )
     
     # Check AI config
     if not settings.ai.api_key:

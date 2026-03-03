@@ -1,0 +1,20 @@
+{
+  "facebook_ads": [
+    {
+      "headline": "Transform Your Home in Minutes",
+      "body": "Tired of clutter? Our organizers help 50,000+ customers create peaceful, organized spaces. Shop now with 40% off!",
+      "cta": "Shop Now"
+    },
+    {
+      "headline": "Organizers That Actually Work",
+      "body": "Stop wasting money on cheap organizers that break. Our premium products last for years. Free shipping over $50!",
+      "cta": "Get Organized"
+    }
+  ],
+  "google_ads": [
+    {
+      "headline": "Home Organization Solutions | 40% Off First Order",
+      "description": "Premium organizers for kitchen, bathroom & closet. Join 50,000+ happy customers. Free shipping over $50!"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "colors": {
+    "primary": "#2563EB",
+    "secondary": "#F97316",
+    "success": "#10B981",
+    "background": "#FFFFFF",
+    "text": "#1A1A2E"
+  },
+  "typography": {
+    "heading_font": "Poppins",
+    "body_font": "Inter"
+  },
+  "sections": {
+    "announcement_bar": {
+      "enabled": true,
+      "text": "Free Shipping on Orders Over $50 | 30-Day Returns",
+      "background": "#2563EB",
+      "text_color": "#FFFFFF"
+    },
+    "header": {
+      "logo": "CoaiHome",
+      "menu": "main-menu",
+      "sticky": true
+    },
+    "hero": {
+      "headline": "Transform Your Home in Minutes",
+      "subheadline": "Join 50,000+ happy customers who discovered the joy of organization",
+      "button_text": "Shop Now - 40% Off",
+      "button_link": "/collections/all"
+    },
+    "featured_products": {
+      "title": "Best Sellers",
+      "collection": "all",
+      "limit": 8
+    },
+    "trust_badges": {
+      "enabled": true,
+      "badges": [
+        "Secure Checkout",
+        "Free Shipping Over $50",
+        "30-Day Returns",
+        "4.9/5 Customer Rating"
+      ]
+    },
+    "newsletter": {
+      "title": "Get 10% Off Your First Order",
+      "subtitle": "Subscribe for exclusive deals and organizing tips",
+      "button_text": "Get My 10% Off"
+    }
+  }
+}

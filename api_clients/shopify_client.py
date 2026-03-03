@@ -6,6 +6,12 @@ import httpx
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import json
+import os
+
+from config.settings import settings
+from models.database import SessionLocal, Product, OrderException
+
+import time
 
 from config.settings import settings
 from models.database import SessionLocal, Product, OrderException
@@ -16,22 +22,66 @@ class ShopifyClient:
     
     def __init__(self):
         self.shop_url = settings.shopify.shop_url
+        self.api_key = settings.shopify.api_key
+        self.api_secret = settings.shopify.api_secret
         self.access_token = settings.shopify.access_token
         self.api_version = settings.shopify.api_version
+        self.ssl_verify = settings.shopify.ssl_verify
+        self.ca_bundle = os.getenv("SHOPIFY_CA_BUNDLE", "").strip()
         self.base_url = f"https://{self.shop_url}/admin/api/{self.api_version}"
-        self.headers = {
-            "X-Shopify-Access-Token": self.access_token,
-            "Content-Type": "application/json"
-        }
+        self._token_expiry = 0
     
+    async def _get_access_token(self) -> str:
+        """Get or refresh access token using client_credentials grant (New in 2026)"""
+        # If we have a manually provided shpat_ token, use it
+        if self.access_token and self.access_token.startswith("shpat_"):
+            return self.access_token
+            
+        # If we have a valid cached token, return it
+        # (For now we rely on the process lifetime, but in prod this would be persistent)
+        if self.access_token and time.time() < self._token_expiry:
+            return self.access_token
+
+        # Acquire new token via client_credentials
+        if not self.api_key or not self.api_secret:
+            raise ValueError("Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET in config")
+
+        token_url = f"https://{self.shop_url}/admin/oauth/access_token"
+        payload = {
+            "client_id": self.api_key,
+            "client_secret": self.api_secret,
+            "grant_type": "client_credentials"
+        }
+        
+        async with httpx.AsyncClient(verify=self.ssl_verify) as client:
+            # Use form-urlencoded as required by Shopify OAuth
+            response = await client.post(token_url, data=payload)
+            if response.status_code >= 400:
+                raise RuntimeError(f"Shopify Auth Failed (2026 Flow): {response.text}")
+            
+            data = response.json()
+            self.access_token = data.get("access_token")
+            # Set expiry (default 24h, we use 23h to be safe)
+            self._token_expiry = time.time() + data.get("expires_in", 86400) - 3600
+            
+            # Persist to .env if needed? For now just keep in memory for the process
+            return self.access_token
+
     async def _request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
         """Make an authenticated request to Shopify API"""
+        token = await self._get_access_token()
+        headers = {
+            "X-Shopify-Access-Token": token,
+            "Content-Type": "application/json"
+        }
+        
         url = f"{self.base_url}/{endpoint}"
-        async with httpx.AsyncClient() as client:
+        verify = self.ca_bundle if self.ca_bundle else self.ssl_verify
+        async with httpx.AsyncClient(verify=verify) as client:
             response = await client.request(
                 method=method,
                 url=url,
-                headers=self.headers,
+                headers=headers,
                 json=data,
                 timeout=30.0
             )

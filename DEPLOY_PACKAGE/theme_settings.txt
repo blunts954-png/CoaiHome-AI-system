@@ -1,0 +1,18 @@
+THEME SETTINGS FOR COAIHOME
+============================
+
+1. Go to: Online Store > Themes > Customize > Theme Settings
+
+2. COLORS:
+   Primary: #2563EB
+   Secondary: #F97316
+   Success: #10B981
+   Background: #FFFFFF
+   Text: #1A1A2E
+
+3. TYPOGRAPHY:
+   Heading Font: Poppins
+   Body Font: Inter
+   Base Size: 16px
+
+4. CUSTOM CSS: Copy from css.txt

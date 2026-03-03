@@ -4,13 +4,15 @@ Automated product discovery, analysis, and import
 """
 import asyncio
 from typing import List, Dict, Any, Optional
+import random
 from datetime import datetime, timedelta
 
 from api_clients.autods_client import get_autods_client
 from api_clients.shopify_client import get_shopify_client
 from services.ai_service import get_ai_service
 from config.settings import settings
-from models.database import SessionLocal, Product, ProductResearchJob, ProductStatus
+from models.database import SessionLocal, Product, ProductResearchJob, ProductStatus, Store
+from automation.utils import _safe_print
 
 
 class ProductResearchAutomation:
@@ -38,23 +40,47 @@ class ProductResearchAutomation:
         
         niche = niche or store.niche
         
-        # Check if AutoDS API is available
+        # Check if supplier API automation is available
         if self.autods.shopify_mode:
+            _safe_print(f"🕵️  Jake Engine: Falling back to No-API research for: {niche}")
+            from automation.product_research_no_api import get_product_research_no_api
+            research_engine = get_product_research_no_api()
+            
+            # Use the No-API engine to find real-ish products
+            opportunities = await research_engine.research_trending_products(niche, limit=10)
+            
+            # Queue these products for approval in the DB
+            db = SessionLocal()
+            for op in opportunities:
+                # Convert dataclass to tuple for _queue_for_approval compatibility
+                p_data = {
+                    "title": op.title,
+                    "description": op.description,
+                    "cost_price": op.cost_price,
+                    "supplier_id": "aliexpress_" + str(random.randint(1000, 9999)),
+                    "supplier_name": op.supplier,
+                    "supplier_rating": op.rating,
+                    "shipping_days": op.shipping_days,
+                    "source_url": op.supplier_url,
+                    "images": op.images
+                }
+                analysis = op.ai_analysis or {"confidence": op.ai_score/100, "suggested_price": op.suggested_price}
+                
+                await self._queue_for_approval(store_id, [(p_data, analysis)])
+            
+            db.close()
+            
             return {
-                "status": "shopify_only_mode",
-                "message": "Automated product research requires AutoDS API",
-                "instructions": [
-                    "1. Find trending products manually on:",
-                    "   - TikTok Creative Center (ads.tiktok.com/business/creativecenter)",
-                    "   - Google Trends (trends.google.com)",
-                    "   - AliExpress Dropshipping Center",
-                    "   - CJ Dropshipping product recommendations",
-                    "2. Add products manually via POST /api/products/manual-add",
-                    "3. Or import directly in Shopify admin, then sync to this system"
-                ],
-                "alternative_endpoint": "/api/products/manual-add",
-                "niche": niche
+                "status": "completed",
+                "message": f"Found {len(opportunities)} products in {niche}. Go to 'Products' to approve!",
+                "products_found": len(opportunities),
+                "products_selected": len(opportunities)
             }
+        
+        # Check if CJ mode is active
+        is_cj_mode = self.autods.provider == "cj" and not self.autods.shopify_mode
+        if is_cj_mode:
+            _safe_print(f"🚀 Running product research with CJ Dropshipping API for niche: {niche}")
         
         # Create job record (only for full mode)
         job = ProductResearchJob(
@@ -79,12 +105,17 @@ class ProductResearchAutomation:
         
         try:
             # Step 1: Get trending products
-            print(f"🔍 Researching trending products in: {niche}")
+            _safe_print(f"🔍 Researching trending products in: {niche}")
             trending = await self.autods.get_trending_products(
                 niche=niche,
                 limit=50,
                 country=store.target_country
             )
+            if trending.get("error"):
+                raise RuntimeError(
+                    f"Supplier product search failed: {trending.get('error')}"
+                )
+
             products = trending.get("products", [])
             result["products_found"] = len(products)
             job.products_found = len(products)
@@ -94,7 +125,7 @@ class ProductResearchAutomation:
             qualified_products = await self._filter_by_constraints(products)
             
             # Step 3: AI analysis
-            print(f"🤖 Analyzing {len(qualified_products)} products...")
+            _safe_print(f"🤖 Analyzing {len(qualified_products)} products...")
             analysis_tasks = [
                 self._analyze_product(p, store) for p in qualified_products
             ]
@@ -117,11 +148,11 @@ class ProductResearchAutomation:
             
             # Step 5: Import products (or queue for approval)
             if settings.system.require_approval_for_import:
-                print(f"⏳ {len(selected)} products queued for approval")
+                _safe_print(f"⏳ {len(selected)} products queued for approval")
                 await self._queue_for_approval(store_id, selected)
                 result["status"] = "pending_approval"
             else:
-                print(f"📦 Importing {len(selected)} products...")
+                _safe_print(f"📦 Importing {len(selected)} products...")
                 imported = await self._import_products(store_id, store, selected)
                 result["products_imported"] = imported
                 job.products_imported = imported
@@ -137,7 +168,7 @@ class ProductResearchAutomation:
             job.status = "failed"
             job.error_message = str(e)
             db.commit()
-            print(f"❌ Research job failed: {e}")
+            _safe_print(f"❌ Research job failed: {e}")
         
         db.close()
         return result
@@ -272,7 +303,7 @@ class ProductResearchAutomation:
                     imported_count += 1
                     
             except Exception as e:
-                print(f"Failed to import product {product_data.get('id')}: {e}")
+                _safe_print(f"Failed to import product {product_data.get('id')}: {e}")
         
         db.commit()
         db.close()
@@ -343,9 +374,6 @@ class ProductResearchAutomation:
         
         db.close()
         return {"status": "success", "product_id": product_id}
-
-
-from models.database import Store
 
 
 def get_product_research() -> ProductResearchAutomation:

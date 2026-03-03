@@ -18,6 +18,7 @@ except ImportError:
 
 from config.settings import settings
 from services.ai_service import get_ai_service
+from automation.utils import _safe_print
 
 
 @dataclass
@@ -69,7 +70,7 @@ class ProductResearchNoAPI:
         3. Use AI to analyze and score each
         4. Return top opportunities
         """
-        print(f"🔍 Researching trending products in: {niche}")
+        _safe_print(f"🔍 Researching trending products in: {niche}")
         
         # Get products from multiple sources
         products = []
@@ -86,7 +87,7 @@ class ProductResearchNoAPI:
         ai_suggestions = await self._get_ai_product_suggestions(niche)
         products.extend(ai_suggestions)
         
-        print(f"📊 Found {len(products)} potential products")
+        _safe_print(f"📊 Found {len(products)} potential products")
         
         # Score each product with AI
         scored_products = await self._score_products(products)
@@ -393,7 +394,7 @@ class ProductResearchNoAPI:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Research report exported to {filename}")
+        _safe_print(f"✅ Research report exported to {filename}")
         return filename
     
     async def get_import_ready_products(self, niche: str = "home organization",

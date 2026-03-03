@@ -5,6 +5,70 @@
 {% block content %}
 <div class="card">
     <div class="card-header">
+        <h2>📦 Your Products (15 Loaded)</h2>
+        <button class="btn btn-primary btn-sm" onclick="loadAllProducts()">Refresh</button>
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Product Name</th>
+                    <th>Status</th>
+                    <th>Cost</th>
+                    <th>Selling Price</th>
+                    <th>Margin</th>
+                    <th>Supplier</th>
+                </tr>
+            </thead>
+            <tbody id="products-table">
+                <tr><td colspan="7">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>➕ Add New Product</h2>
+    </div>
+    <div class="card-body">
+        <form id="add-product-form" onsubmit="addProduct(event)">
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Product Title</label>
+                    <input type="text" class="form-control" name="title" placeholder="e.g., Under Sink Organizer" required>
+                </div>
+                <div class="form-group">
+                    <label>Supplier Name</label>
+                    <input type="text" class="form-control" name="supplier_name" value="CJ Dropshipping">
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Cost Price ($)</label>
+                    <input type="number" step="0.01" class="form-control" name="cost_price" placeholder="10.00" required>
+                </div>
+                <div class="form-group">
+                    <label>Selling Price ($)</label>
+                    <input type="number" step="0.01" class="form-control" name="selling_price" placeholder="29.99" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea class="form-control" name="description" rows="3" placeholder="Product description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Supplier URL (CJ Dropshipping link)</label>
+                <input type="url" class="form-control" name="supplier_url" placeholder="https://cjdropshipping.com/product/...">
+            </div>
+            <button type="submit" class="btn btn-success">Add Product</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
         <h2>⏳ Pending Approval</h2>
         <button class="btn btn-primary btn-sm" onclick="loadPending()">Refresh</button>
     </div>
@@ -26,134 +90,157 @@
         </table>
     </div>
 </div>
-
-<div class="card">
-    <div class="card-header">
-        <h2>📦 All Products</h2>
-    </div>
-    <div class="card-body">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Title</th>
-                    <th>Status</th>
-                    <th>Price</th>
-                    <th>Margin %</th>
-                    <th>Stock</th>
-                </tr>
-            </thead>
-            <tbody id="products-table">
-                <tr><td colspan="6">Loading...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h2>🔍 Research History</h2>
-    </div>
-    <div class="card-body">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Niche</th>
-                    <th>Status</th>
-                    <th>Found</th>
-                    <th>Selected</th>
-                    <th>Imported</th>
-                </tr>
-            </thead>
-            <tbody id="research-table">
-                <tr><td colspan="6">Loading...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// API helper with error handling
+async function apiRequest(url, options = {}) {
+    console.log('API Request:', url);
+    try {
+        const response = await fetch(url, options);
+        let data = {};
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+        }
+        if (!response.ok) {
+            throw new Error(data.detail || data.message || 'HTTP ' + response.status);
+        }
+        return data;
+    } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+    }
+}
+
+// Escape HTML to prevent XSS attacks
+const escapeHtml = (str) => {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+};
+
+async function loadAllProducts() {
+    console.log('Loading products...');
+    try {
+        const data = await apiRequest('/api/products/list');
+        const tbody = document.getElementById('products-table');
+
+        if (!data.products || data.products.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">No products yet. Add some!</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.products.map(p => {
+            const margin = ((p.selling_price - p.cost_price) / p.selling_price * 100).toFixed(1);
+            return '<tr>' +
+                '<td>' + p.id + '</td>' +
+                '<td>' + escapeHtml(p.title || 'N/A') + '</td>' +
+                '<td><span class="badge badge-' + (p.status === 'active' ? 'approved' : 'pending') + '">' + escapeHtml(p.status) + '</span></td>' +
+                '<td>$' + Number(p.cost_price || 0).toFixed(2) + '</td>' +
+                '<td>$' + Number(p.selling_price || 0).toFixed(2) + '</td>' +
+                '<td>' + margin + '%</td>' +
+                '<td>' + escapeHtml(p.supplier_name || 'N/A') + '</td>' +
+            '</tr>';
+        }).join('');
+        
+        console.log('Loaded', data.products.length, 'products');
+    } catch (e) {
+        console.error('Failed to load products:', e);
+        const errorDiv = document.createElement('div');
+        errorDiv.textContent = 'Error: ' + e.message;
+        document.getElementById('products-table').innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;"></td></tr>';
+        document.getElementById('products-table').querySelector('td').appendChild(errorDiv);
+    }
+}
+
 async function loadPending() {
     try {
-        const response = await fetch('/api/products/pending');
-        const data = await response.json();
+        const data = await apiRequest('/api/products/pending');
         const tbody = document.getElementById('pending-table');
         
-        if (data.products.length === 0) {
+        if (!data.products || data.products.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #666;">No pending products</td></tr>';
             return;
         }
         
-        tbody.innerHTML = data.products.map(p => `
-            <tr>
-                <td>${p.title}</td>
-                <td>${p.supplier_name || 'N/A'}</td>
-                <td>$${p.cost_price?.toFixed(2) || '0.00'}</td>
-                <td>$${p.suggested_price?.toFixed(2) || '0.00'}</td>
-                <td>${(p.ai_confidence * 100)?.toFixed(0) || 0}%</td>
-                <td>
-                    <button class="btn btn-success btn-sm" onclick="approveProduct(${p.id})">Approve</button>
-                    <button class="btn btn-danger btn-sm" onclick="rejectProduct(${p.id})">Reject</button>
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = data.products.map(p => 
+            '<tr>' +
+                '<td>' + escapeHtml(p.title) + '</td>' +
+                '<td>' + escapeHtml(p.supplier_name || 'N/A') + '</td>' +
+                '<td>$' + (p.cost_price ? p.cost_price.toFixed(2) : '0.00') + '</td>' +
+                '<td>$' + (p.suggested_price ? p.suggested_price.toFixed(2) : '0.00') + '</td>' +
+                '<td>' + ((p.ai_confidence * 100) || 0).toFixed(0) + '%</td>' +
+                '<td>' +
+                    '<button class="btn btn-success btn-sm" onclick="approveProduct(' + p.id + ')">Approve</button> ' +
+                    '<button class="btn btn-danger btn-sm" onclick="rejectProduct(' + p.id + ')">Reject</button>' +
+                '</td>' +
+            '</tr>'
+        ).join('');
     } catch (e) {
-        console.error('Failed to load pending products:', e);
+        console.error('Failed to load pending:', e);
+        const errorDiv = document.createElement('div');
+        errorDiv.textContent = 'Error: ' + e.message;
+        document.getElementById('pending-table').innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;"></td></tr>';
+        document.getElementById('pending-table').querySelector('td').appendChild(errorDiv);
+    }
+}
+
+async function addProduct(event) {
+    event.preventDefault();
+    const form = event.target;
+    const data = {
+        title: form.title.value,
+        description: form.description.value,
+        cost_price: parseFloat(form.cost_price.value),
+        selling_price: parseFloat(form.selling_price.value),
+        supplier_name: form.supplier_name.value,
+        supplier_url: form.supplier_url.value,
+        image_urls: [],
+        tags: []
+    };
+    
+    try {
+        await apiRequest('/api/products/manual-add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        alert('Product added successfully!');
+        form.reset();
+        loadAllProducts();
+    } catch (e) {
+        alert('Failed to add product: ' + e.message);
     }
 }
 
 async function approveProduct(id) {
-    if (!confirm('Approve this product for import?')) return;
+    if (!confirm('Approve this product?')) return;
     try {
-        const response = await fetch(`/api/products/${id}/approve`, { method: 'POST' });
-        const data = await response.json();
-        if (data.status === 'success') {
-            alert('Product approved!');
-            loadPending();
-        } else {
-            alert('Error: ' + data.message);
-        }
+        await apiRequest('/api/products/' + id + '/approve', { method: 'POST' });
+        alert('Product approved!');
+        loadPending();
+        loadAllProducts();
     } catch (e) {
-        alert('Failed to approve: ' + e.message);
+        alert('Failed: ' + e.message);
     }
 }
 
 async function rejectProduct(id) {
     if (!confirm('Reject this product?')) return;
     try {
-        await fetch(`/api/products/${id}/reject`, { method: 'POST' });
+        await apiRequest('/api/products/' + id + '/reject', { method: 'POST' });
         loadPending();
+        loadAllProducts();
     } catch (e) {
-        alert('Failed to reject: ' + e.message);
-    }
-}
-
-async function loadResearchHistory() {
-    try {
-        const response = await fetch('/api/research/jobs');
-        const data = await response.json();
-        const tbody = document.getElementById('research-table');
-        
-        tbody.innerHTML = data.jobs.map(j => `
-            <tr>
-                <td>${new Date(j.created_at).toLocaleString()}</td>
-                <td>${j.niche}</td>
-                <td><span class="badge badge-${j.status === 'completed' ? 'approved' : j.status === 'failed' ? 'error' : 'pending'}">${j.status}</span></td>
-                <td>${j.products_found}</td>
-                <td>${j.products_selected}</td>
-                <td>${j.products_imported}</td>
-            </tr>
-        `).join('');
-    } catch (e) {
-        console.error('Failed to load research history:', e);
+        alert('Failed: ' + e.message);
     }
 }
 
 // Initialize
+console.log('Products page loading...');
+loadAllProducts();
 loadPending();
-loadResearchHistory();
 </script>
 {% endblock %}

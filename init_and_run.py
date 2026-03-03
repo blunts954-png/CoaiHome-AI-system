@@ -5,6 +5,11 @@ For Railway deployment
 import os
 import sys
 
+from automation.utils import _configure_utf8_console
+
+_configure_utf8_console()
+
+
 def main():
     print("=" * 60)
     print("🚀 AI DROPSHIPPING SYSTEM - RAILWAY DEPLOYMENT")

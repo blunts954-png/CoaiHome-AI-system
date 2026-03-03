@@ -14,7 +14,7 @@ try:
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
-    print("⚠️ Playwright not installed. Run: pip install playwright && playwright install")
+    print("Playwright not installed. Run: pip install playwright && playwright install")
 
 from config.settings import settings
 

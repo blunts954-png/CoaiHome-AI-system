@@ -6,19 +6,41 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import uvicorn
 import os
+import sys
 import hashlib
 import hmac
 import re
 import secrets
+import asyncio
+import threading
 from urllib.parse import urlencode
 import httpx
+from sqlalchemy.exc import SQLAlchemyError
 
 from config.settings import settings
+from automation.utils import parse_cj_credentials
+
+# Global lock for automation startup to prevent race conditions
+_automation_lock = threading.Lock()
+
+
+def _configure_utf8_console():
+    """Avoid UnicodeEncodeError on Windows cp1252 consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+_configure_utf8_console()
 
 
 # Pydantic models for API
@@ -52,6 +74,14 @@ OAUTH_STATE_STORE: Dict[str, str] = {}
 INSTALLED_SHOPS: Dict[str, str] = {}
 
 
+def _safe_log(message: str):
+    """Log text without failing on Windows cp1252 consoles."""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        print(message.encode("ascii", "replace").decode("ascii"))
+
+
 def _is_valid_shop_domain(shop: str) -> bool:
     return bool(SHOPIFY_DOMAIN_RE.match(shop))
 
@@ -76,16 +106,16 @@ def _verify_shopify_hmac(request: Request, api_secret: str) -> bool:
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    print("🚀 Starting CoaiHome AI System")
+    _safe_log("Starting CoaiHome AI System")
     
     # Initialize database
     try:
         from models.database import init_db
-        print("🗄️  Initializing database...")
+        _safe_log("Initializing database...")
         init_db()
-        print("✅ Database ready")
+        _safe_log("Database ready")
     except Exception as e:
-        print(f"⚠️  Database warning: {e}")
+        _safe_log(f"Database warning: {e}")
     
     # Start scheduler (optional)
     try:
@@ -93,12 +123,12 @@ async def lifespan(app: FastAPI):
         scheduler = get_scheduler()
         scheduler.start()
     except Exception as e:
-        print(f"⚠️  Scheduler warning: {e}")
+        _safe_log(f"Scheduler warning: {e}")
     
     yield
     
     # Shutdown
-    print("🛑 Shutting down...")
+    _safe_log("Shutting down...")
 
 
 # Create app
@@ -107,6 +137,31 @@ app = FastAPI(
     description="AI-powered Shopify dropshipping automation system",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Add CORS middleware - use configurable origins from settings
+_allowed_origins = ["*"]  # Default for development
+
+# Check settings for production origins
+if settings.system.cors_allowed_origins:
+    _allowed_origins = [o.strip() for o in settings.system.cors_allowed_origins.split(",") if o.strip()]
+else:
+    # Warn if using wildcard CORS in production (non-debug) mode
+    if not settings.system.debug:
+        _safe_log("WARNING: CORS is allowing all origins (no SYSTEM_CORS_ALLOWED_ORIGINS set). "
+                  "This is insecure for production. Set SYSTEM_CORS_ALLOWED_ORIGINS env var.")
+
+# Warn if SSL verification is disabled
+if not settings.shopify.ssl_verify:
+    _safe_log("WARNING: SHOPIFY_SSL_VERIFY is false. TLS certificate verification is disabled! "
+              "This is insecure for production.")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # Templates
@@ -202,7 +257,7 @@ async def shopify_callback(request: Request):
         "code": code
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=30.0, verify=settings.shopify.ssl_verify) as client:
         response = await client.post(token_url, json=payload)
     if response.status_code >= 400:
         raise HTTPException(status_code=502, detail=f"Token exchange failed: {response.text}")
@@ -458,7 +513,11 @@ async def list_all_products(store_id: Optional[int] = None, status: Optional[str
             for p in products
         ],
         "total": len(products),
-        "mode": "SHOPIFY-ONLY (AutoDS API not configured)" if not settings.autods.api_key else "FULL MODE"
+        "mode": (
+            "SHOPIFY-ONLY (Supplier API not configured)"
+            if not settings.cj.api_token
+            else "FULL MODE (CJ)"
+        )
     }
 
 
@@ -466,6 +525,7 @@ async def list_all_products(store_id: Optional[int] = None, status: Optional[str
 async def get_shopify_products(limit: int = 50):
     """Fetch products directly from Shopify"""
     from api_clients.shopify_client import get_shopify_client
+    import httpx
     
     try:
         shopify = get_shopify_client()
@@ -487,14 +547,17 @@ async def get_shopify_products(limit: int = 50):
             ],
             "count": len(products)
         }
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Shopify API unavailable: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Internal error fetching products: {str(e)}")
 
 
 @app.get("/api/shopify/orders")
 async def get_shopify_orders(limit: int = 50, status: str = "any"):
     """Fetch orders directly from Shopify"""
     from api_clients.shopify_client import get_shopify_client
+    import httpx
     
     try:
         shopify = get_shopify_client()
@@ -516,30 +579,57 @@ async def get_shopify_orders(limit: int = 50, status: str = "any"):
             ],
             "count": len(orders)
         }
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Shopify API unavailable: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Internal error fetching orders: {str(e)}")
 
 
 @app.get("/api/system/status")
 async def get_system_status():
     """Get system configuration status"""
+    provider_preference = (settings.system.supplier_platform or "cj").lower()
+    autods_connected = False  # AutoDS deprecated - using CJ only
+
+    cj_parsed = parse_cj_credentials(
+        cj_token=settings.cj.api_token,
+        cj_email=settings.cj.api_email,
+        cj_key=settings.cj.api_key
+    )
+    cj_configured = bool(settings.cj.api_token or settings.cj.api_email or settings.cj.api_key)
+    cj_connected = cj_parsed["is_valid"]
+
+    if provider_preference == "cj":
+        supplier_connected = cj_connected
+        supplier_provider = "CJ"
+    elif provider_preference == "auto":
+        supplier_connected = cj_connected
+        supplier_provider = "CJ" if cj_connected else "NONE"
+    else:
+        supplier_connected = cj_connected
+        supplier_provider = "CJ"
+
     return {
-        "mode": "SHOPIFY-ONLY" if not settings.autods.api_key else "FULL",
+        "mode": "SHOPIFY-ONLY" if not supplier_connected else "FULL",
+        "supplier_provider": supplier_provider,
         "shopify_connected": bool(settings.shopify.shop_url and settings.shopify.access_token),
-        "autods_connected": bool(settings.autods.api_key),
+        "autods_connected": autods_connected,
+        "cj_configured": cj_configured,
+        "cj_connected": cj_connected,
+        "supplier_connected": supplier_connected,
         "features": {
-            "product_research": "MANUAL" if not settings.autods.api_key else "AUTOMATED",
-            "product_import": "SHOPIFY_DIRECT" if not settings.autods.api_key else "AUTODS",
-            "auto_fulfillment": "MANUAL" if not settings.autods.api_key else "AUTOMATED",
+            "product_research": "MANUAL" if not supplier_connected else "AUTOMATED",
+            "product_import": "SHOPIFY_DIRECT" if not supplier_connected else "CJ",
+            "auto_fulfillment": "MANUAL" if not supplier_connected else "AUTOMATED",
             "pricing_optimization": "AVAILABLE",
             "ai_content": "AVAILABLE",
-            "inventory_sync": "SHOPIFY_ONLY" if not settings.autods.api_key else "FULL"
+            "inventory_sync": "SHOPIFY_ONLY" if not supplier_connected else "FULL"
         },
-        "setup_instructions": None if settings.autods.api_key else [
+        "setup_instructions": None if supplier_connected else [
             "1. Find products on AliExpress/CJ Dropshipping/Spocket",
             "2. Use POST /api/products/manual-add to add products",
-            "3. Manage orders via Shopify admin or AutoDS dashboard",
-            "4. Get AutoDS API key for full automation"
+            "3. Manage orders via Shopify admin or your supplier dashboard",
+            "4. Set SYSTEM_SUPPLIER_PLATFORM=cj and add CJ_API_TOKEN for CJ automation"
         ]
     }
 
@@ -904,10 +994,24 @@ async def get_dashboard_stats():
         
         db.close()
         return stats
-    except Exception as e:
+    except SQLAlchemyError as e:
         # Return empty stats if database not ready
+        import logging
+        logging.warning(f"Database unavailable for stats: {e}")
         return {
-            "total_products": 0,
+            "active_products": 0,
+            "pending_products": 0,
+            "pending_price_changes": 0,
+            "open_exceptions": 0,
+            "total_stores": 0,
+            "error": str(e),
+            "database_status": "unavailable"
+        }
+    except Exception as e:
+        # Return empty stats if any other error
+        import logging
+        logging.error(f"Stats endpoint error: {e}")
+        return {
             "active_products": 0,
             "pending_products": 0,
             "pending_price_changes": 0,
@@ -927,6 +1031,15 @@ async def health_check():
     has_credentials = bool(settings.shopify.access_token or 
                           (settings.shopify.api_key and settings.shopify.api_secret))
     has_ai = bool(settings.ai.api_key and settings.ai.api_key != "your_openai_api_key_here")
+
+    autods_connected = bool(settings.autods.api_key)
+    cj_parsed = parse_cj_credentials(
+        cj_token=settings.cj.api_token,
+        cj_email=settings.cj.api_email,
+        cj_key=settings.cj.api_key
+    )
+    cj_connected = cj_parsed["is_valid"]
+    supplier_connected = autods_connected or cj_connected
     
     # Check database
     db_status = "ok"
@@ -939,9 +1052,9 @@ async def health_check():
         db_status = f"error: {str(e)}"
     
     # Determine mode
-    if has_credentials and has_ai:
+    if has_credentials and has_ai and supplier_connected:
         mode = "FULL"
-    elif has_credentials:
+    elif has_credentials and has_ai:
         mode = "SHOPIFY_ONLY"
     else:
         mode = "SETUP_REQUIRED"
@@ -953,6 +1066,9 @@ async def health_check():
         "shopify_configured": bool(shop_url),
         "shopify_credentials": has_credentials,
         "ai_configured": has_ai,
+        "supplier_connected": supplier_connected,
+        "autods_connected": autods_connected,
+        "cj_connected": cj_connected,
         "mode": mode,
         "store": settings.store.brand_name or "Not configured"
     }
@@ -983,12 +1099,22 @@ async def start_full_automation():
     
     auto = get_full_automation()
     
-    # Run scheduler in background thread
-    def run_scheduler():
-        asyncio.run(auto.start_scheduler())
-    
-    thread = threading.Thread(target=run_scheduler, daemon=True)
-    thread.start()
+    # Use lock to prevent race conditions with concurrent startup
+    with _automation_lock:
+        if auto.running:
+            return {
+                "status": "already_running",
+                "message": "Full automation scheduler is already running"
+            }
+        
+        # Run scheduler in background thread
+        auto.running = True
+        
+        def run_scheduler():
+            asyncio.run(auto.start_scheduler())
+        
+        thread = threading.Thread(target=run_scheduler, daemon=True)
+        thread.start()
     
     return {
         "status": "started",

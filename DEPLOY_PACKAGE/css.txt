@@ -1,0 +1,7 @@
+/* CoaiHome Theme CSS */
+:root{--trust:#2563EB;--action:#F97316;--money:#10B981}
+.btn-primary,.add-to-cart{background:var(--action)!important;color:#fff!important;border-radius:8px!important;padding:14px 32px!important;font-weight:600!important}
+.checkout-button{background:var(--money)!important;color:#fff!important;padding:16px 40px!important;font-size:18px!important;font-weight:700!important}
+.product-price{color:var(--action);font-size:20px;font-weight:700}
+.scarcity-badge{background:#FEE2E2;color:#DC2626;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:700}
+.site-header{background:var(--trust)}

@@ -1,35 +1,67 @@
 """
-AutoDS API Client - SHOPIFY-ONLY MODE
-This client works without AutoDS API by using Shopify directly.
-When you get AutoDS API access, swap this back to full version.
+Supplier client compatibility layer.
+Supports AutoDS (legacy mode), CJ Dropshipping, and Shopify-only fallback.
 """
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import random
+import httpx
 
 from config.settings import settings
 from api_clients.shopify_client import get_shopify_client
+from automation.utils import parse_cj_credentials
 
 
 class AutoDSClient:
     """
-    AutoDS API Client - Currently in SHOPIFY-ONLY MODE
-    
-    This version works without AutoDS API credentials by:
-    1. Using Shopify for product/order management
-    2. Returning mock data for research (until you add products manually)
-    3. Logging what WOULD have been sent to AutoDS
-    
-    When you get AutoDS API key, this will automatically use it.
+    CJ Dropshipping client (formerly AutoDS client).
+    Uses CJ API for product research, import, and order fulfillment.
+    SYSTEM_SUPPLIER_PLATFORM=cj (default) - uses CJ API
     """
-    
+
     def __init__(self):
-        self.api_key = settings.autods.api_key
-        self.base_url = settings.autods.base_url
-        self.shopify_mode = not self.api_key or self.api_key == "your_autods_api_key"
+        self.provider_preference = (settings.system.supplier_platform or "cj").lower()
+        self.autods_api_key = settings.autods.api_key  # Kept for backward compatibility
         
-        if self.shopify_mode:
-            print("⚠️  AutoDS Client: RUNNING IN SHOPIFY-ONLY MODE")
+        # Use shared utility for CJ credential parsing
+        cj_parsed = parse_cj_credentials(
+            cj_token=settings.cj.api_token,
+            cj_email=settings.cj.api_email,
+            cj_key=settings.cj.api_key
+        )
+        self.cj_api_token = settings.cj.api_token
+        self.cj_api_email = cj_parsed["email"]
+        self.cj_api_key = cj_parsed["api_key"]
+        
+        self.cj_base_url = settings.cj.base_url.rstrip("/")
+        self.base_url = settings.autods.base_url
+
+        if self.provider_preference == "cj":
+            self.provider = "cj"
+        # Default to CJ if no valid credentials
+        if self.provider_preference == "cj" or not cj_parsed["is_valid"]:
+            self.provider = "cj"
+        else:
+            self.provider = "cj"  # CJ is the only supported provider now
+
+        self.api_key = self.autods_api_key
+        
+        # Determine if we're in Shopify-only mode (no supplier API)
+        self.shopify_mode = (
+            not cj_parsed["is_valid"]
+        )
+        
+        if self.provider == "cj" and not self.shopify_mode:
+            print("Supplier Client: RUNNING IN CJ MODE")
+            print("   - Product research: CJ API")
+            print("   - Product import: Shopify direct")
+            print("   - Supplier source: CJ Dropshipping")
+        elif self.provider == "cj" and self.shopify_mode:
+            print("Supplier Client: CJ selected but CJ credentials are missing or invalid")
+            print("   - Falling back to SHOPIFY-ONLY MODE")
+            print("   - Add valid CJ_API_TOKEN (email@api@key) or CJ_API_EMAIL + CJ_API_KEY")
+        elif self.shopify_mode:
+            print("AutoDS Client: RUNNING IN SHOPIFY-ONLY MODE")
             print("   - Product research: Manual entry only")
             print("   - Orders: Shopify fulfillment only")
             print("   - Add AUTODS_API_KEY env var when you get API access")
@@ -39,7 +71,99 @@ class AutoDSClient:
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+        self.cj_headers = {
+            "CJ-Access-Token": self.cj_api_token,
+            "Content-Type": "application/json"
+        }
         self._mock_products_db = []  # In-memory storage for demo
+
+    async def _cj_request(self, method: str, endpoint: str,
+                          params: Optional[Dict[str, Any]] = None,
+                          payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Call CJ API and normalize error handling."""
+        # Use the CJ client for proper authentication
+        from api_clients.cj_dropshipping_client import get_cj_client
+        cj_client = get_cj_client()
+        
+        if cj_client.shopify_mode:
+            raise ValueError("CJ API credentials not configured")
+
+        return await cj_client._make_request(
+            method=method.upper(),
+            endpoint=endpoint,
+            params=params,
+            json=payload
+        )
+
+    def _cj_extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract list payload from CJ responses with varying schemas."""
+        if not isinstance(response, dict):
+            return []
+        data = response.get("data")
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in ("list", "items", "records", "content", "productList"):
+                if isinstance(data.get(key), list):
+                    return data.get(key, [])
+        for key in ("list", "items", "records", "content"):
+            if isinstance(response.get(key), list):
+                return response.get(key, [])
+        return []
+
+    def _to_float(self, value: Any, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _normalize_cj_product(self, product: Dict[str, Any]) -> Dict[str, Any]:
+        """Map CJ product schema to the internal product schema used by automation."""
+        product_id = (
+            product.get("pid")
+            or product.get("productId")
+            or product.get("id")
+            or product.get("vid")
+            or ""
+        )
+        title = (
+            product.get("productNameEn")
+            or product.get("nameEn")
+            or product.get("productName")
+            or product.get("productNameCn")
+            or "CJ Product"
+        )
+        cost_price = self._to_float(
+            product.get("sellPrice")
+            or product.get("price")
+            or product.get("variantSellPrice")
+            or product.get("variantPrice"),
+            0.0
+        )
+        supplier_rating = self._to_float(product.get("score") or product.get("supplierScore"), 4.5)
+        shipping_days = int(self._to_float(product.get("deliveryTime") or product.get("shippingDays"), 10))
+        images = []
+        for key in ("productImage", "image", "images"):
+            value = product.get(key)
+            if isinstance(value, list):
+                images = [str(v) for v in value if v]
+                break
+            if isinstance(value, str) and value:
+                images = [value]
+                break
+
+        return {
+            "id": product_id,
+            "source_url": f"https://www.cjdropshipping.com/product/{product_id}.html" if product_id else "",
+            "title": title,
+            "description": product.get("description") or product.get("productDescription") or "",
+            "cost_price": cost_price,
+            "supplier_id": "cj",
+            "supplier_name": "CJ Dropshipping",
+            "supplier_rating": supplier_rating,
+            "shipping_days": shipping_days,
+            "images": images
+        }
     
     # ============ AI Store Builder (SHOPIFY MODE) ============
     
@@ -77,6 +201,42 @@ class AutoDSClient:
         In Shopify mode: Search your existing Shopify products
         or return instructions for manual research
         """
+        if self.provider == "cj" and not self.shopify_mode:
+            filters = filters or {}
+            limit = int(filters.get("limit", 20))
+            page = int(filters.get("page", 1))
+
+            try:
+                # CJ endpoint docs: product/listV2
+                response = await self._cj_request(
+                    "GET",
+                    "product/listV2",
+                    params={
+                        "pageNum": page,
+                        "pageSize": max(1, min(limit, 100)),
+                        "categoryName": query or "",
+                        "productNameEn": query or ""
+                    }
+                )
+                products = [self._normalize_cj_product(p) for p in self._cj_extract_items(response)]
+                if query:
+                    q = query.lower().strip()
+                    products = [p for p in products if q in p.get("title", "").lower()]
+
+                return {
+                    "products": products[:limit],
+                    "filters_applied": filters,
+                    "source": "cj",
+                    "message": f"Found {len(products[:limit])} products from CJ"
+                }
+            except Exception as e:
+                return {
+                    "products": [],
+                    "error": str(e),
+                    "source": "cj",
+                    "message": "CJ search failed. Verify CJ_API_TOKEN and CJ_BASE_URL."
+                }
+
         if not self.shopify_mode:
             pass  # Would call real API
         
@@ -88,7 +248,7 @@ class AutoDSClient:
                 "1. Find products on AliExpress, CJ Dropshipping, etc.",
                 "2. Add them manually via /api/products/manual-add",
                 "3. Or import via Shopify admin",
-                "4. Get AutoDS API key for automated research"
+                "4. Set SYSTEM_SUPPLIER_PLATFORM=cj and add CJ_API_TOKEN (or use AutoDS API)"
             ],
             "filters_applied": filters or {}
         }
@@ -97,6 +257,10 @@ class AutoDSClient:
                                     limit: int = 20,
                                     country: str = "US") -> Dict:
         """Return empty trending - requires manual research in Shopify mode"""
+        if self.provider == "cj" and not self.shopify_mode:
+            filters = {"limit": limit, "country": country}
+            return await self.search_products(niche or "", filters=filters)
+
         return {
             "products": [],
             "message": "SHOPIFY MODE: Use manual product research",
@@ -105,6 +269,20 @@ class AutoDSClient:
     
     async def get_product_details(self, product_id: str) -> Dict:
         """Get from Shopify in Shopify mode"""
+        if self.provider == "cj" and not self.shopify_mode:
+            try:
+                response = await self._cj_request("GET", "product/query", params={"pid": product_id})
+                data = response.get("data", response)
+                if isinstance(data, list):
+                    data = data[0] if data else {}
+                if not isinstance(data, dict):
+                    data = {}
+                normalized = self._normalize_cj_product(data)
+                normalized["source"] = "cj"
+                return normalized
+            except Exception as e:
+                return {"error": str(e), "message": "Product not found in CJ"}
+
         try:
             shopify = get_shopify_client()
             product = await shopify.get_product(product_id)
@@ -153,12 +331,18 @@ class AutoDSClient:
             
             result = await shopify.create_product(shopify_product)
             shopify_product_id = result.get("product", {}).get("id")
+            supplier_product_id = product_data.get("source_id") or product_data.get("supplier_product_id")
             
             return {
                 "success": True,
                 "shopify_product_id": shopify_product_id,
-                "autods_product_id": None,
-                "message": "SHOPIFY MODE: Product created directly in Shopify (no AutoDS integration)"
+                # Keep this field for compatibility with existing DB columns/workflows
+                "autods_product_id": supplier_product_id or shopify_product_id,
+                "message": (
+                    "CJ MODE: Product created in Shopify from CJ source"
+                    if self.provider == "cj"
+                    else "SHOPIFY MODE: Product created directly in Shopify (no AutoDS integration)"
+                )
             }
             
         except Exception as e:
@@ -290,7 +474,11 @@ class AutoDSClient:
             
             return {
                 "orders": transformed,
-                "message": "SHOPIFY MODE: Orders from Shopify (not AutoDS)"
+                "message": (
+                    "CJ MODE: Orders from Shopify (use CJ dashboard/API for supplier-side status)"
+                    if self.provider == "cj"
+                    else "SHOPIFY MODE: Orders from Shopify (not AutoDS)"
+                )
             }
             
         except Exception as e:
@@ -320,8 +508,12 @@ class AutoDSClient:
     async def enable_auto_fulfillment(self, store_id: str, enabled: bool = True) -> Dict:
         """Not available in Shopify mode"""
         return {
-            "message": "SHOPIFY MODE: Auto-fulfillment requires AutoDS API",
-            "note": "Fulfill orders manually via Shopify or AutoDS dashboard",
+            "message": (
+                "CJ MODE: Use CJ API/dashboard for supplier fulfillment configuration"
+                if self.provider == "cj"
+                else "SHOPIFY MODE: Auto-fulfillment requires AutoDS API"
+            ),
+            "note": "Fulfill orders manually via Shopify or supplier dashboard",
             "enabled": False
         }
     
@@ -378,6 +570,11 @@ class AutoDSClient:
     
     async def list_suppliers(self) -> Dict:
         """Not available without AutoDS API"""
+        if self.provider == "cj":
+            return {
+                "suppliers": [{"id": "cj", "name": "CJ Dropshipping"}],
+                "message": "CJ provider active"
+            }
         return {
             "suppliers": [],
             "message": "SHOPIFY MODE: Supplier management requires AutoDS API",
@@ -386,6 +583,17 @@ class AutoDSClient:
     
     async def get_supplier_performance(self, supplier_id: str) -> Dict:
         """Not available"""
+        if self.provider == "cj":
+            return {
+                "supplier_id": supplier_id,
+                "total_orders": 0,
+                "successful": 0,
+                "failed": 0,
+                "avg_fulfillment_days": 0,
+                "refund_rate": 0,
+                "stockout_count": 0,
+                "message": "CJ supplier performance placeholder (connect detailed CJ analytics as needed)"
+            }
         return {
             "message": "SHOPIFY MODE: Supplier data requires AutoDS API",
             "supplier_id": supplier_id
@@ -393,6 +601,12 @@ class AutoDSClient:
     
     async def switch_supplier(self, product_id: str, new_supplier_id: str) -> Dict:
         """Not available"""
+        if self.provider == "cj":
+            return {
+                "message": "CJ MODE: Supplier switching should be done in CJ dashboard or via CJ product mapping APIs",
+                "product_id": product_id,
+                "new_supplier_id": new_supplier_id
+            }
         return {
             "message": "SHOPIFY MODE: Supplier switching requires AutoDS API",
             "note": "Switch suppliers in AutoDS dashboard"

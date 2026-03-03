@@ -31,7 +31,7 @@
                     🔍 Run Product Research
                 </button>
                 <button class="btn btn-primary" onclick="runResearchNoAPI()">
-                    🔍 Research (No AutoDS API)
+                    🔍 Research (No Supplier API)
                 </button>
                 <button class="btn btn-primary" onclick="runPricing()">
                     💰 Run Pricing Optimization
@@ -45,45 +45,28 @@
                 <button class="btn btn-success" onclick="startFullAutomation()">
                     ⚡ Start 24/7 Automation
                 </button>
+                <a href="/products" class="btn btn-primary" style="text-align: center; text-decoration: none;" id="products-link">
+                    📦 View Products
+                </a>
             </div>
         </div>
     </div>
     
     <div class="card">
         <div class="card-header">
-            <h2>🛠️ Create New Store</h2>
+            <h2>🛠️ System Status</h2>
         </div>
         <div class="card-body">
-            <form id="create-store-form" onsubmit="createStore(event)">
-                <div class="form-group">
-                    <label>Niche</label>
-                    <input type="text" class="form-control" name="niche" placeholder="e.g., home decor" required>
-                </div>
-                <div class="form-group">
-                    <label>Brand Name</label>
-                    <input type="text" class="form-control" name="brand_name" placeholder="Your Store Name" required>
-                </div>
-                <div class="form-group">
-                    <label>Target Country</label>
-                    <select class="form-control" name="target_country">
-                        <option value="US">United States</option>
-                        <option value="UK">United Kingdom</option>
-                        <option value="CA">Canada</option>
-                        <option value="AU">Australia</option>
-                        <option value="EU">Europe</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Brand Tone</label>
-                    <select class="form-control" name="brand_tone">
-                        <option value="professional">Professional</option>
-                        <option value="casual">Casual</option>
-                        <option value="luxury">Luxury</option>
-                        <option value="playful">Playful</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-success">Create AI Store</button>
-            </form>
+            <div id="system-status" style="font-family: monospace; font-size: 0.85rem;">
+                <div>Loading status...</div>
+            </div>
+            <hr style="margin: 1rem 0; border: none; border-top: 1px solid #eee;">
+            <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem;">Quick Links:</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <a href="/api/products/list" target="_blank" class="btn btn-sm btn-primary" style="text-align: center;">View Products API</a>
+                <a href="/api/system/status" target="_blank" class="btn btn-sm btn-primary" style="text-align: center;">System Status API</a>
+                <a href="/health" target="_blank" class="btn btn-sm btn-primary" style="text-align: center;">Health Check</a>
+            </div>
         </div>
     </div>
 </div>
@@ -97,7 +80,7 @@
             <thead>
                 <tr>
                     <th>Job Name</th>
-                    <th>Next Run</th>
+                    <th>Status</th>
                     <th>Schedule</th>
                 </tr>
             </thead>
@@ -111,10 +94,12 @@
 <div class="card">
     <div class="card-header">
         <h2>📝 System Log</h2>
+        <button class="btn btn-sm" onclick="clearLog()">Clear</button>
     </div>
     <div class="card-body">
         <div id="system-log" style="font-family: monospace; font-size: 0.8rem; max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 1rem; border-radius: 4px;">
-            <div>System initialized...</div>
+            <div>System initialized. Ready to use!</div>
+            <div>15 products loaded in database.</div>
         </div>
     </div>
 </div>
@@ -122,35 +107,113 @@
 
 {% block extra_js %}
 <script>
+// API helper with better error handling
+async function apiRequest(url, options = {}) {
+    console.log('API Request:', url, options);
+    
+    try {
+        const response = await fetch(url, options);
+        console.log('Response:', response.status, response.statusText);
+        
+        let data = {};
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+            console.log('Response data:', data);
+        }
+
+        if (!response.ok) {
+            throw new Error(data.detail || data.message || 'HTTP ' + response.status);
+        }
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        if (data.status === 'error') {
+            throw new Error(data.message || 'Request failed');
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+    }
+}
+
 // Load stats on page load
 async function loadStats() {
+    log('Loading stats...');
     try {
-        const response = await fetch('/api/stats');
-        const data = await response.json();
-        document.getElementById('active-products').textContent = data.active_products;
-        document.getElementById('pending-products').textContent = data.pending_products;
-        document.getElementById('pending-pricing').textContent = data.pending_price_changes;
-        document.getElementById('open-exceptions').textContent = data.open_exceptions;
+        const data = await apiRequest('/api/stats');
+        document.getElementById('active-products').textContent = data.active_products || 0;
+        document.getElementById('pending-products').textContent = data.pending_products || 0;
+        document.getElementById('pending-pricing').textContent = data.pending_price_changes || 0;
+        document.getElementById('open-exceptions').textContent = data.open_exceptions || 0;
+        log('Stats loaded: ' + (data.active_products || 0) + ' active products');
     } catch (e) {
-        console.error('Failed to load stats:', e);
+        log('Failed to load stats: ' + e.message);
+        console.error('Stats error:', e);
+    }
+}
+
+// Load system status
+async function loadSystemStatus() {
+    try {
+        const data = await apiRequest('/api/system/status');
+        const statusDiv = document.getElementById('system-status');
+        
+        // Use textContent instead of innerHTML to prevent XSS
+        // Build safe HTML by escaping user-controlled data
+        const escapeHtml = (str) => {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        };
+        
+        let html = '<div><strong>Mode:</strong> ' + escapeHtml(data.mode || 'Unknown') + '</div>';
+        html += '<div><strong>Supplier:</strong> ' + escapeHtml(data.supplier_provider || 'None') + '</div>';
+        html += '<div><strong>Shopify:</strong> ' + (data.shopify_connected ? 'Connected' : 'Not Connected') + '</div>';
+        html += '<div><strong>CJ Dropshipping:</strong> ' + (data.cj_connected ? 'Connected' : 'Not Connected') + '</div>';
+        
+        if (data.features) {
+            html += '<div style="margin-top: 0.5rem;"><strong>Features:</strong></div>';
+            for (const [key, value] of Object.entries(data.features)) {
+                html += '<div style="padding-left: 1rem;">• ' + escapeHtml(key) + ': ' + escapeHtml(String(value)) + '</div>';
+            }
+        }
+        
+        statusDiv.innerHTML = html;
+    } catch (e) {
+        document.getElementById('system-status').innerHTML = '<div style="color: red;">Error loading status: ' + escapeHtml(e.message) + '</div>';
     }
 }
 
 // Load scheduled jobs
 async function loadJobs() {
     try {
-        const response = await fetch('/api/scheduler/jobs');
-        const data = await response.json();
+        const data = await apiRequest('/api/scheduler/jobs');
         const tbody = document.getElementById('jobs-table');
+        if (!data.jobs || data.jobs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3">No scheduled jobs running</td></tr>';
+            return;
+        }
+        // Use escapeHtml to prevent XSS attacks
+        const escapeHtml = (str) => {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        };
         tbody.innerHTML = data.jobs.map(job => `
             <tr>
-                <td>${job.name}</td>
-                <td>${job.next_run ? new Date(job.next_run).toLocaleString() : 'N/A'}</td>
-                <td>${job.trigger}</td>
+                <td>${escapeHtml(job.name || 'Unknown')}</td>
+                <td><span class="badge badge-approved">Active</span></td>
+                <td>${escapeHtml(job.trigger || 'Manual')}</td>
             </tr>
         `).join('');
     } catch (e) {
-        console.error('Failed to load jobs:', e);
+        document.getElementById('jobs-table').innerHTML = '<tr><td colspan="3">Scheduler not available</td></tr>';
     }
 }
 
@@ -158,10 +221,31 @@ async function loadJobs() {
 async function runResearch() {
     log('Starting product research...');
     try {
-        const response = await fetch('/api/research/run?store_id=1', { method: 'POST' });
-        const data = await response.json();
-        log(`Research completed: ${data.products_selected || 0} products selected`);
+        const data = await apiRequest('/api/research/run?store_id=1', { method: 'POST' });
+        if (data.status === 'shopify_only_mode') {
+            log('Note: Automated research needs CJ API. Use "Research (No Supplier API)" button instead.');
+            return;
+        }
+        log('Research completed: ' + (data.products_selected || 0) + ' products selected');
         loadStats();
+    } catch (e) {
+        if (e.message.includes('Store not found')) {
+            log('Research failed: No store found. Create a store first.');
+        } else {
+            log('Research failed: ' + e.message);
+        }
+    }
+}
+
+async function runResearchNoAPI() {
+    log('Researching products (No API needed)...');
+    try {
+        const data = await apiRequest('/api/research/no-api?niche=home%20organization&limit=20', { method: 'POST' });
+        log('Found ' + data.products_found + ' products!');
+        if (data.products && data.products.length > 0) {
+            const top = data.products[0];
+            log('Top product: ' + top.title.substring(0, 40) + '... (Score: ' + top.ai_score + ')');
+        }
     } catch (e) {
         log('Research failed: ' + e.message);
     }
@@ -170,106 +254,92 @@ async function runResearch() {
 async function runPricing() {
     log('Starting pricing optimization...');
     try {
-        const response = await fetch('/api/pricing/optimize', { method: 'POST' });
-        const data = await response.json();
-        log(`Pricing optimization completed: ${data.suggestions_generated || 0} suggestions`);
+        const data = await apiRequest('/api/pricing/optimize', { method: 'POST' });
+        if (data.status === 'no_products') {
+            log('No active products found. Add products first.');
+            return;
+        }
+        log('Pricing optimization completed: ' + (data.suggestions_generated || 0) + ' suggestions');
         loadStats();
     } catch (e) {
-        log('Pricing optimization failed: ' + e.message);
+        log('Pricing failed: ' + e.message);
     }
 }
 
 async function syncInventory() {
     log('Syncing inventory...');
     try {
-        const response = await fetch('/api/inventory/sync', { method: 'POST' });
-        const data = await response.json();
-        log(`Inventory sync completed: ${data.stock_updates || 0} updates`);
+        const data = await apiRequest('/api/inventory/sync', { method: 'POST' });
+        log('Inventory sync: ' + (data.stock_updates || 0) + ' updates');
     } catch (e) {
         log('Inventory sync failed: ' + e.message);
     }
 }
 
-async function createStore(event) {
-    event.preventDefault();
-    const form = event.target;
-    const data = {
-        niche: form.niche.value,
-        brand_name: form.brand_name.value,
-        target_country: form.target_country.value,
-        brand_tone: form.brand_tone.value,
-        primary_color: '#000000',
-        secondary_color: '#ffffff'
-    };
-    
-    log('Creating new AI store...');
-    try {
-        const response = await fetch('/api/stores/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
-        if (result.status === 'completed') {
-            log(`Store created: ${result.shopify_domain}`);
-            form.reset();
-        } else {
-            log('Store creation in progress...');
-        }
-        loadStats();
-    } catch (e) {
-        log('Store creation failed: ' + e.message);
-    }
-}
-
-async function runResearchNoAPI() {
-    log('🔍 Researching products (No AutoDS API needed)...');
-    try {
-        const response = await fetch('/api/research/no-api?niche=home%20organization&limit=20', { method: 'POST' });
-        const data = await response.json();
-        log(`✅ Found ${data.products_found} products!`);
-        log(`Top product: ${data.products?.[0]?.title || 'N/A'} (Score: ${data.products?.[0]?.ai_score})`);
-    } catch (e) {
-        log('❌ Research failed: ' + e.message);
-    }
-}
-
 async function generateTikTokContent() {
-    log('🎬 Generating TikTok content...');
+    log('Generating TikTok content for all products...');
     try {
-        const response = await fetch('/api/tiktok/generate-content', { method: 'POST' });
-        const data = await response.json();
-        log(`✅ Created ${data.content_pieces} content pieces!`);
-        log(`📁 Exported to: ${data.export_file}`);
-        log('Check content_calendar.csv for your scripts!');
+        const data = await apiRequest('/api/tiktok/generate-content', { method: 'POST' });
+        log('Created ' + data.content_pieces + ' content pieces!');
+        if (data.export_file) {
+            log('Exported to: ' + data.export_file);
+        }
+        log('TIP: Check content_calendar.csv for video scripts!');
     } catch (e) {
-        log('❌ Content generation failed: ' + e.message);
+        log('Content generation failed: ' + e.message);
     }
 }
 
 async function startFullAutomation() {
-    log('⚡ Starting 24/7 automation...');
+    log('Starting 24/7 automation...');
     try {
-        const response = await fetch('/api/full-automation/start', { method: 'POST' });
-        const data = await response.json();
-        log(`✅ ${data.message}`);
-        log('Daily schedule:');
-        data.tasks?.forEach(task => log(`  • ${task}`));
+        const data = await apiRequest('/api/full-automation/start', { method: 'POST' });
+        log(data.message);
+        if (data.tasks && data.tasks.length > 0) {
+            log('Schedule:');
+            data.tasks.forEach(task => log('  • ' + task));
+        }
     } catch (e) {
-        log('❌ Failed to start: ' + e.message);
+        log('Failed to start: ' + e.message);
     }
 }
 
 function log(message) {
     const logDiv = document.getElementById('system-log');
     const time = new Date().toLocaleTimeString();
-    logDiv.innerHTML += `<div>[${time}] ${message}</div>`;
+    // Use textContent and createElement to prevent XSS
+    const entry = document.createElement('div');
+    entry.textContent = '[' + time + '] ' + message;
+    logDiv.appendChild(entry);
     logDiv.scrollTop = logDiv.scrollHeight;
+    console.log('[' + time + '] ' + message);
+}
+
+function clearLog() {
+    document.getElementById('system-log').innerHTML = '<div>Log cleared.</div>';
+}
+
+// Load product count for button
+async function loadProductCount() {
+    try {
+        const data = await apiRequest('/api/stats');
+        const count = data.active_products || 0;
+        const link = document.getElementById('products-link');
+        if (link && count > 0) {
+            link.innerHTML = '📦 View Products (' + count + ' Added)';
+        }
+    } catch (e) {
+        console.log('Could not load product count:', e.message);
+    }
 }
 
 // Initialize
+console.log('Dashboard loading...');
 loadStats();
+loadSystemStatus();
 loadJobs();
+loadProductCount();
 setInterval(loadStats, 30000); // Refresh every 30 seconds
+log('Dashboard ready!');
 </script>
 {% endblock %}

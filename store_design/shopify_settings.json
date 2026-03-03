@@ -1,0 +1,9 @@
+{
+  "name": "CoaiHome",
+  "email": "support@coaihome.com",
+  "currency": "USD",
+  "timezone": "America/New_York",
+  "weight_unit": "lb",
+  "money_format": "${{amount}}",
+  "money_with_currency_format": "${{amount}} USD"
+}

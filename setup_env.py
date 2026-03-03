@@ -3,6 +3,12 @@ Interactive .env file setup helper
 Run this to configure your system easily!
 """
 import os
+import sys
+
+from automation.utils import _configure_utf8_console
+
+
+_configure_utf8_console()
 
 def main():
     print("=" * 60)
@@ -24,13 +30,13 @@ def main():
     print()
     print("You need ONE of these two options:")
     print()
-    print("Option 1: Admin API Token (EASIEST - Recommended)")
+    print("Option 1: Admin API Token (custom app install)")
     print("  → Full access to your own store")
-    print("  → Get it from: Shopify Admin → Settings → Apps → Develop apps")
+    print("  → Available in Shopify Admin for custom apps")
     print()
-    print("Option 2: OAuth App Credentials")
-    print("  → For letting others install your app")
-    print("  → You already have these (Client ID + Secret)")
+    print("Option 2: OAuth App Credentials (Dev Dashboard)")
+    print("  → Use Client ID + Secret, then run OAuth install flow")
+    print("  → Works for modern Shopify app setup")
     print()
     
     choice = input("Which option? (1 or 2): ").strip()
@@ -60,6 +66,21 @@ def main():
     
     ai_model = input("AI Model (press Enter for gpt-4o-mini): ").strip()
     env_vars["AI_MODEL"] = ai_model if ai_model else "gpt-4o-mini"
+
+    print()
+    print("🚚 SUPPLIER PLATFORM")
+    print("-" * 40)
+    print("1) CJ Dropshipping (recommended)")
+    print("2) None (Shopify-only/manual)")
+    supplier_choice = input("Choose supplier mode (1/2): ").strip()
+
+    if supplier_choice == "1":
+        env_vars["SYSTEM_SUPPLIER_PLATFORM"] = "cj"
+        cj_token = input("CJ API Token (optional now, can add later): ").strip()
+        if cj_token:
+            env_vars["CJ_API_TOKEN"] = cj_token
+    else:
+        env_vars["SYSTEM_SUPPLIER_PLATFORM"] = "cj"  # Default to CJ
     
     print()
     print("⚙️  STORE SETTINGS (Optional)")
@@ -86,6 +107,11 @@ def main():
         
         f.write("\n# AI Configuration\n")
         for key in ["AI_API_KEY", "AI_MODEL"]:
+            if key in env_vars:
+                f.write(f"{key}={env_vars[key]}\n")
+
+        f.write("\n# Supplier Platform\n")
+        for key in ["SYSTEM_SUPPLIER_PLATFORM", "CJ_API_TOKEN", "AUTODS_API_KEY"]:
             if key in env_vars:
                 f.write(f"{key}={env_vars[key]}\n")
         

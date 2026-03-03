@@ -4,8 +4,8 @@ All settings are loaded from environment variables with sensible defaults.
 """
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
-from typing import Optional, List
+from pydantic import Field, model_validator
+from typing import Optional, List, Any
 from functools import lru_cache
 from dotenv import load_dotenv
 
@@ -24,6 +24,7 @@ class ShopifyConfig(BaseSettings):
     api_version: str = Field(default="2024-01", description="Shopify API version")
     webhook_secret: str = Field(default="", description="Webhook validation secret")
     app_url: str = Field(default="", description="Public app URL (e.g., https://your-app.up.railway.app)")
+    ssl_verify: bool = Field(default=True, description="Verify TLS certificates for Shopify HTTPS requests")
     api_scopes: str = Field(
         default="read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_customers",
         description="Comma-separated Shopify OAuth scopes"
@@ -42,6 +43,22 @@ class AutoDSConfig(BaseSettings):
     auto_fulfillment_enabled: bool = Field(default=True, description="Enable auto-fulfillment")
     auto_pricing_enabled: bool = Field(default=True, description="Enable AI pricing optimization")
     auto_import_enabled: bool = Field(default=True, description="Enable auto product import")
+
+
+class CJConfig(BaseSettings):
+    """CJ Dropshipping API Configuration"""
+    model_config = SettingsConfigDict(env_prefix="CJ_")
+
+    api_token: str = Field(default="", description="CJ API token (full token from CJ)")
+    api_email: str = Field(default="", description="CJ API email (before @api@)")
+    api_key: str = Field(default="", description="CJ API key (after @api@)")
+    base_url: str = Field(
+        default="https://developers.cjdropshipping.com/api2.0/v1",
+        description="CJ API base URL"
+    )
+    default_country: str = Field(default="US", description="Default shipping country")
+    auto_import_enabled: bool = Field(default=True, description="Enable auto product import from CJ")
+    auto_fulfillment_enabled: bool = Field(default=True, description="Enable order handling via CJ APIs")
 
 
 class AIConfig(BaseSettings):
@@ -107,10 +124,12 @@ class SystemConfig(BaseSettings):
     debug: bool = Field(default=False)
     log_level: str = Field(default="INFO")
     # Use Railway's DATABASE_URL if available, fallback to SQLite
-    database_url: str = Field(
-        default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///./dropshipping_ai.db")
-    )
+    database_url: str = Field(default="sqlite:///./dropshipping_ai.db", description="Database connection URL")
     redis_url: str = Field(default="redis://localhost:6379/0")
+    
+    # CORS - comma-separated list of allowed origins (e.g., "https://domain1.com,https://domain2.com")
+    # Leave empty or unset to allow all origins (development mode)
+    cors_allowed_origins: str = Field(default="", description="Comma-separated allowed CORS origins")
     
     # Automation Schedules
     pricing_check_interval_hours: int = Field(default=24)
@@ -121,6 +140,10 @@ class SystemConfig(BaseSettings):
     require_approval_for_import: bool = Field(default=False)
     require_approval_for_price_changes: bool = Field(default=False)
     require_approval_for_refunds: bool = Field(default=True, description="Always require approval for refunds")
+    supplier_platform: str = Field(
+        default="cj",
+        description="Supplier platform: cj (recommended), or autods"
+    )
 
 
 class Settings(BaseSettings):
@@ -133,10 +156,26 @@ class Settings(BaseSettings):
     
     shopify: ShopifyConfig = Field(default_factory=ShopifyConfig)
     autods: AutoDSConfig = Field(default_factory=AutoDSConfig)
+    cj: CJConfig = Field(default_factory=CJConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
     store: StoreConfig = Field(default_factory=StoreConfig)
     notifications: NotificationConfig = Field(default_factory=NotificationConfig)
     system: SystemConfig = Field(default_factory=SystemConfig)
+    
+    @model_validator(mode='after')
+    def validate_env_overrides(cls, self) -> 'Settings':
+        """Ensure environment variables override defaults after Pydantic loads."""
+        # Override ssl_verify from env (SHOPIFY_SSL_VERIFY)
+        ssl_verify_env = os.getenv("SHOPIFY_SSL_VERIFY")
+        if ssl_verify_env is not None:
+            self.shopify.ssl_verify = ssl_verify_env.lower() == "true"
+        
+        # Override database_url from env (DATABASE_URL)
+        db_url_env = os.getenv("DATABASE_URL")
+        if db_url_env is not None:
+            self.system.database_url = db_url_env
+        
+        return self
 
 
 @lru_cache()

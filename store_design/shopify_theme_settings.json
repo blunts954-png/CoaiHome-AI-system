@@ -1,0 +1,151 @@
+{
+  "name": "CoaiHome - Psychological Conversion Theme",
+  "version": "1.0.0",
+  "author": "AI Dropshipping System",
+  
+  "colors": {
+    "primary": "#2563EB",
+    "primary_hover": "#1D4ED8",
+    "secondary": "#F97316",
+    "secondary_hover": "#EA580C",
+    "success": "#10B981",
+    "success_hover": "#059669",
+    "text_primary": "#1A1A2E",
+    "text_secondary": "#6B7280",
+    "text_light": "#FFFFFF",
+    "background": "#FFFFFF",
+    "background_secondary": "#F5F5F5",
+    "background_dark": "#1A1A2E",
+    "border": "#E5E7EB",
+    "error": "#DC2626",
+    "warning": "#F59E0B",
+    "info": "#3B82F6"
+  },
+  
+  "typography": {
+    "heading_font": "Poppins",
+    "body_font": "Inter",
+    "base_size": 16,
+    "heading_scale": 1.25,
+    "line_height": 1.6
+  },
+  
+  "buttons": {
+    "primary": {
+      "background": "#F97316",
+      "text": "#FFFFFF",
+      "border_radius": 8,
+      "padding": "14px 32px",
+      "font_size": 16,
+      "font_weight": 600,
+      "text_transform": "uppercase",
+      "letter_spacing": 0.5,
+      "shadow": "0 4px 6px rgba(249, 115, 22, 0.3)"
+    },
+    "secondary": {
+      "background": "#2563EB",
+      "text": "#FFFFFF",
+      "border_radius": 8,
+      "padding": "12px 24px",
+      "font_size": 14,
+      "font_weight": 500
+    },
+    "checkout": {
+      "background": "#10B981",
+      "text": "#FFFFFF",
+      "border_radius": 8,
+      "padding": "16px 40px",
+      "font_size": 18,
+      "font_weight": 700,
+      "shadow": "0 4px 6px rgba(16, 185, 129, 0.3)"
+    }
+  },
+  
+  "product_cards": {
+    "background": "#FFFFFF",
+    "border_radius": 12,
+    "shadow": "0 2px 8px rgba(0,0,0,0.08)",
+    "shadow_hover": "0 8px 24px rgba(0,0,0,0.12)",
+    "hover_transform": "translateY(-4px)",
+    "transition": "all 0.3s ease"
+  },
+  
+  "scarcity_badges": {
+    "low_stock": {
+      "background": "#FEE2E2",
+      "text": "#DC2626",
+      "border": "#FECACA",
+      "text_content": "Only {count} left!"
+    },
+    "bestseller": {
+      "background": "#FEF3C7",
+      "text": "#92400E",
+      "border": "#FDE68A",
+      "text_content": "Best Seller"
+    },
+    "sale": {
+      "background": "#F97316",
+      "text": "#FFFFFF",
+      "text_content": "SAVE {percent}%"
+    }
+  },
+  
+  "header": {
+    "background": "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)",
+    "text": "#FFFFFF",
+    "sticky": true,
+    "shadow": "0 2px 10px rgba(0,0,0,0.1)"
+  },
+  
+  "trust_bar": {
+    "enabled": true,
+    "background": "#F5F5F5",
+    "text": "#1A1A2E",
+    "icons": [
+      {"icon": "shield", "text": "Secure Checkout"},
+      {"icon": "truck", "text": "Free Shipping Over $50"},
+      {"icon": "refresh", "text": "30-Day Returns"},
+      {"icon": "star", "text": "4.9/5 Customer Rating"}
+    ]
+  },
+  
+  "urgency_elements": {
+    "countdown_timer": {
+      "enabled": true,
+      "background": "#FEF3C7",
+      "text": "#92400E",
+      "message": "Sale ends in: {timer}"
+    },
+    "recent_sales_popup": {
+      "enabled": true,
+      "message": "{name} from {location} just bought {product}",
+      "delay": 8,
+      "duration": 5
+    }
+  },
+  
+  "checkout_optimization": {
+    "progress_bar": true,
+    "trust_badges": [
+      "ssl_secure",
+      "256_encryption",
+      "money_back_guarantee",
+      "mcafee_secure"
+    ],
+    "guest_checkout": true,
+    "one_page_checkout": false,
+    "exit_intent_popup": {
+      "enabled": true,
+      "title": "Wait! Don't Miss Out",
+      "subtitle": "Get 10% off your first order",
+      "button_text": "Get My 10% Off"
+    }
+  },
+  
+  "social_proof": {
+    "customer_count": "50,000+",
+    "review_rating": 4.9,
+    "review_count": 2847,
+    "display_on": ["homepage", "product_page", "cart"]
+  }
+}

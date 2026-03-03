@@ -82,6 +82,34 @@ class AIService:
             # Log error
             print(f"AI API Error: {e}")
             raise
+
+    def _parse_json_response(self, content: str) -> Dict:
+        """Extract and parse JSON from LLM response content"""
+        if not content:
+            return {}
+            
+        try:
+            return json.loads(content.strip())
+        except json.JSONDecodeError:
+            # Try to extract JSON from markdown code blocks
+            try:
+                if "```json" in content:
+                    json_str = content.split("```json")[1].split("```")[0]
+                    return json.loads(json_str.strip())
+                elif "```" in content:
+                    json_str = content.split("```")[1].split("```")[0]
+                    return json.loads(json_str.strip())
+                
+                # Try finding any { ... } block
+                import re
+                match = re.search(r'(\{.*\})', content, re.DOTALL)
+                if match:
+                    return json.loads(match.group(1).strip())
+            except:
+                pass
+            
+            print(f"AI Warning: Failed to parse JSON from content: {content[:100]}...")
+            return {}
     
     def _log_ai_action(self, action_type: str, entity_type: str, entity_id: str,
                       prompt: str, response: str, status: str = "success",
@@ -154,9 +182,9 @@ Respond in JSON format:
         ]
         
         result = await self._call_llm(messages)
+        analysis = self._parse_json_response(result["content"])
         
-        try:
-            analysis = json.loads(result["content"])
+        if analysis:
             self._log_ai_action(
                 action_type="product_analysis",
                 entity_type="product",
@@ -167,26 +195,16 @@ Respond in JSON format:
                 extra_data={"should_import": analysis.get("should_import")}
             )
             return analysis
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            content = result["content"]
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
-            try:
-                analysis = json.loads(content.strip())
-                return analysis
-            except:
-                return {
-                    "should_import": False,
-                    "confidence": 0.0,
-                    "reasoning": "Failed to parse AI response",
-                    "suggested_price": 0,
-                    "suggested_markup": 2.5,
-                    "risks": ["AI analysis failed"],
-                    "opportunities": []
-                }
+        else:
+            return {
+                "should_import": False,
+                "confidence": 0.0,
+                "reasoning": "Failed to parse AI response",
+                "suggested_price": 0,
+                "suggested_markup": 2.5,
+                "risks": ["AI analysis failed"],
+                "opportunities": []
+            }
     
     async def select_best_products(self, products: List[Dict], 
                                    max_selections: int = 5) -> List[Dict]:
@@ -225,9 +243,9 @@ Return a JSON array of selected product IDs with reasoning:
         ]
         
         result = await self._call_llm(messages)
+        selections = self._parse_json_response(result["content"])
         
-        try:
-            selections = json.loads(result["content"])
+        if isinstance(selections, list):
             self._log_ai_action(
                 action_type="product_selection",
                 entity_type="product_list",
@@ -238,9 +256,8 @@ Return a JSON array of selected product IDs with reasoning:
                 extra_data={"selected_count": len(selections)}
             )
             return selections
-        except:
-            # Fallback: return empty selection
-            return []
+        
+        return []
     
     # ============ Pricing Optimization ============
     
@@ -290,9 +307,9 @@ Return JSON array:
         ]
         
         result = await self._call_llm(messages)
+        suggestions = self._parse_json_response(result["content"])
         
-        try:
-            suggestions = json.loads(result["content"])
+        if isinstance(suggestions, list):
             self._log_ai_action(
                 action_type="price_optimization",
                 entity_type="product_list",
@@ -303,8 +320,8 @@ Return JSON array:
                 extra_data={"suggestions_count": len(suggestions)}
             )
             return suggestions
-        except:
-            return []
+        
+        return []
     
     # ============ Content Generation ============
     
@@ -341,9 +358,9 @@ Return JSON:
         ]
         
         result = await self._call_llm(messages)
+        content = self._parse_json_response(result["content"])
         
-        try:
-            content = json.loads(result["content"])
+        if content:
             self._log_ai_action(
                 action_type="content_generation",
                 entity_type="product",
@@ -353,14 +370,14 @@ Return JSON:
                 status="success"
             )
             return content
-        except:
-            return {
-                "title": product_info.get("title", "Product"),
-                "description_html": product_info.get("description", ""),
-                "bullet_points": [],
-                "meta_description": "",
-                "tags": []
-            }
+            
+        return {
+            "title": product_info.get("title", "Product"),
+            "description_html": product_info.get("description", ""),
+            "bullet_points": [],
+            "meta_description": "",
+            "tags": []
+        }
     
     async def generate_store_content(self, store_spec: Dict) -> Dict:
         """Generate homepage and page content for a new store"""
@@ -394,10 +411,7 @@ Return JSON:
         
         result = await self._call_llm(messages)
         
-        try:
-            return json.loads(result["content"])
-        except:
-            return {}
+        return self._parse_json_response(result["content"])
     
     async def generate_email_template(self, email_type: str, 
                                      context: Dict) -> Dict:
@@ -429,10 +443,7 @@ Return JSON:
         
         result = await self._call_llm(messages)
         
-        try:
-            return json.loads(result["content"])
-        except:
-            return {}
+        return self._parse_json_response(result["content"])
     
     # ============ Customer Support ============
     
@@ -483,9 +494,9 @@ Return JSON:
         ]
         
         result = await self._call_llm(messages)
+        response_data = self._parse_json_response(result["content"])
         
-        try:
-            response_data = json.loads(result["content"])
+        if response_data:
             self._log_ai_action(
                 action_type="support_response",
                 entity_type="support_ticket",
@@ -496,15 +507,15 @@ Return JSON:
                 extra_data={"category": response_data.get("category")}
             )
             return response_data
-        except:
-            return {
-                "can_handle": False,
-                "response": "Unable to process request",
-                "confidence": 0,
-                "requires_approval": True,
-                "category": "general",
-                "suggested_action": "escalate"
-            }
+            
+        return {
+            "can_handle": False,
+            "response": "Unable to process request",
+            "confidence": 0,
+            "requires_approval": True,
+            "category": "general",
+            "suggested_action": "escalate"
+        }
     
     # ============ TikTok Content Generation ============
     
@@ -573,9 +584,9 @@ Return JSON:
         ]
         
         result = await self._call_llm(messages)
+        script = self._parse_json_response(result["content"])
         
-        try:
-            script = json.loads(result["content"])
+        if script:
             self._log_ai_action(
                 action_type="tiktok_script_generation",
                 entity_type="product",
@@ -586,17 +597,17 @@ Return JSON:
                 extra_data={"content_type": content_type}
             )
             return script
-        except:
-            return {
-                "hook": f"Stop struggling with {product.get('category', 'mess')}!",
-                "script": "Show the problem, then reveal the solution with this product",
-                "visuals": ["Show messy situation", "Introduce product", "Show result"],
-                "text_overlay": ["POV: You found the solution", "Link in bio"],
-                "hashtags": ["#homeorganization", "#organization", "#satisfying"],
-                "duration_seconds": 30,
-                "cta": "Get yours - link in bio!",
-                "audio_suggestion": "Trending organization ASMR sound"
-            }
+            
+        return {
+            "hook": f"Stop struggling with {product.get('category', 'mess')}!",
+            "script": "Show the problem, then reveal the solution with this product",
+            "visuals": ["Show messy situation", "Introduce product", "Show result"],
+            "text_overlay": ["POV: You found the solution", "Link in bio"],
+            "hashtags": ["#homeorganization", "#organization", "#satisfying"],
+            "duration_seconds": 30,
+            "cta": "Get yours - link in bio!",
+            "audio_suggestion": "Trending organization ASMR sound"
+        }
     
     async def generate_tiktok_calendar(self, products: List[Dict], days: int = 30) -> Dict:
         """Generate a content calendar with TikTok video ideas"""
@@ -641,11 +652,7 @@ Return JSON:
         ]
         
         result = await self._call_llm(messages)
-        
-        try:
-            return json.loads(result["content"])
-        except:
-            return {"calendar": [], "weekly_themes": ["Product showcases", "Tips & tricks", "Behind the scenes", "Trending content"]}
+        return self._parse_json_response(result["content"])
     
     # ============ Store Redesign ============
     
@@ -761,17 +768,7 @@ Return JSON:
         
         result = await self._call_llm(messages)
         
-        try:
-            return json.loads(result["content"])
-        except:
-            return {
-                "risk_level": "medium",
-                "recommendation": "monitor",
-                "confidence": 0.5,
-                "concerns": [],
-                "action_items": [],
-                "alternative_suppliers": []
-            }
+        return self._parse_json_response(result["content"])
 
 
 # Singleton instance
