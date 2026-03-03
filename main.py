@@ -285,14 +285,20 @@ async def shopify_install_status(shop: str):
 
 @app.post("/api/stores/create")
 async def create_store(spec: StoreSpec, background_tasks: BackgroundTasks):
-    """Create a new AI-built store"""
+    """Create a new AI-built store in the background"""
     from automation.store_builder import get_store_builder
     builder = get_store_builder()
     
-    # Run in background as it takes time
-    result = await builder.create_store_from_spec(spec.dict())
+    # Run in background as it takes minutes
+    # We return a standard response immediately
+    background_tasks.add_task(builder.create_store_from_spec, spec.dict())
     
-    return result
+    return {
+        "status": "started",
+        "message": f"🏗️ Jake Engine: Building {spec.brand_name} in the background. Check your store in 3-5 minutes!",
+        "brand_name": spec.brand_name
+    }
+
 
 
 @app.get("/api/stores")
