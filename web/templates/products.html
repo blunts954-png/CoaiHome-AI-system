@@ -1,28 +1,186 @@
 {% extends "base.html" %}
 
-{% block title %}Products - AI Dropshipping{% endblock %}
+{% block extra_css %}
+<style>
+    :root {
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.3);
+        --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    }
+
+    body {
+        background: radial-gradient(circle at top right, #f8fafc, #f1f5f9);
+    }
+
+    .page-header {
+        margin-bottom: 2rem;
+    }
+
+    .page-header h1 {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #1e293b;
+        letter-spacing: -0.025em;
+    }
+
+    .card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+        margin-bottom: 2rem;
+        overflow: hidden;
+    }
+
+    .card-header {
+        padding: 1.25rem 1.5rem;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .card-header h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #334155;
+    }
+
+    .table-container {
+        padding: 1rem;
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th {
+        text-align: left;
+        padding: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 2px solid #f1f5f9;
+    }
+
+    td {
+        padding: 1rem;
+        font-size: 0.875rem;
+        color: #334155;
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: middle;
+    }
+
+    tr:hover {
+        background: #f8fafc;
+    }
+
+    .badge {
+        padding: 0.25rem 0.625rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .badge-active {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-pending {
+        background: #fef9c3;
+        color: #854d0e;
+    }
+
+    .badge-draft {
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+    .img-preview {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #f1f5f9;
+    }
+
+    .btn-action {
+        padding: 0.4rem 0.8rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border: 1px solid #e2e8f0;
+        background: white;
+        cursor: pointer;
+    }
+
+    .btn-action:hover {
+        background: #f8fafc;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.25rem;
+        padding: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #475569;
+        margin-bottom: 0.375rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.625rem;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        font-size: 0.875rem;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
+<div class="page-header">
+    <h1>Product Intelligence</h1>
+</div>
+
 <div class="card">
     <div class="card-header">
-        <h2>📦 Your Products (15 Loaded)</h2>
-        <button class="btn btn-primary btn-sm" onclick="loadAllProducts()">Refresh</button>
+        <h2>🛍️ Live Inventory</h2>
+        <button class="btn btn-action" onclick="loadAllProducts()">🔄 Refresh</button>
     </div>
-    <div class="card-body">
+    <div class="table-container">
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Product Name</th>
+                    <th>Ref</th>
+                    <th>Product Details</th>
                     <th>Status</th>
-                    <th>Cost</th>
-                    <th>Selling Price</th>
+                    <th>Intelligence</th>
+                    <th>Price</th>
                     <th>Margin</th>
-                    <th>Supplier</th>
                 </tr>
             </thead>
             <tbody id="products-table">
-                <tr><td colspan="7">Loading...</td></tr>
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 3rem;">Loading your inventory...</td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -30,62 +188,63 @@
 
 <div class="card">
     <div class="card-header">
-        <h2>➕ Add New Product</h2>
+        <h2>🛠️ Manual Intelligence Injection</h2>
     </div>
-    <div class="card-body">
-        <form id="add-product-form" onsubmit="addProduct(event)">
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Product Title</label>
-                    <input type="text" class="form-control" name="title" placeholder="e.g., Under Sink Organizer" required>
-                </div>
-                <div class="form-group">
-                    <label>Supplier Name</label>
-                    <input type="text" class="form-control" name="supplier_name" value="CJ Dropshipping">
-                </div>
-            </div>
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Cost Price ($)</label>
-                    <input type="number" step="0.01" class="form-control" name="cost_price" placeholder="10.00" required>
-                </div>
-                <div class="form-group">
-                    <label>Selling Price ($)</label>
-                    <input type="number" step="0.01" class="form-control" name="selling_price" placeholder="29.99" required>
-                </div>
+    <form id="add-product-form" onsubmit="addProduct(event)">
+        <div class="form-grid">
+            <div class="form-group" style="grid-column: span 2;">
+                <label>Target Title</label>
+                <input type="text" class="form-control" name="title" placeholder="What are we selling?" required>
             </div>
             <div class="form-group">
-                <label>Description</label>
-                <textarea class="form-control" name="description" rows="3" placeholder="Product description..."></textarea>
+                <label>Acquisition Cost ($)</label>
+                <input type="number" step="0.01" class="form-control" name="cost_price" placeholder="0.00" required>
             </div>
             <div class="form-group">
-                <label>Supplier URL (CJ Dropshipping link)</label>
-                <input type="url" class="form-control" name="supplier_url" placeholder="https://cjdropshipping.com/product/...">
+                <label>Target Retail ($)</label>
+                <input type="number" step="0.01" class="form-control" name="selling_price" placeholder="0.00" required>
             </div>
-            <button type="submit" class="btn btn-success">Add Product</button>
-        </form>
-    </div>
+            <div class="form-group" style="grid-column: span 2;">
+                <label>Narrative / Description</label>
+                <textarea class="form-control" name="description" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Source Provider</label>
+                <input type="text" class="form-control" name="supplier_name" value="CJ Dropshipping">
+            </div>
+            <div class="form-group">
+                <label>Source URL</label>
+                <input type="url" class="form-control" name="supplier_url">
+            </div>
+        </div>
+        <div style="padding: 0 1.5rem 1.5rem;">
+            <button type="submit" class="btn btn-primary"
+                style="width: 100%; background: var(--accent-gradient); border: none; padding: 0.8rem;">
+                🚀 INJECT INTO CATALOG
+            </button>
+        </div>
+    </form>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h2>⏳ Pending Approval</h2>
-        <button class="btn btn-primary btn-sm" onclick="loadPending()">Refresh</button>
+        <h2>⚖️ Research & Approval Queue</h2>
     </div>
-    <div class="card-body">
+    <div class="table-container">
         <table>
             <thead>
                 <tr>
-                    <th>Product</th>
-                    <th>Supplier</th>
-                    <th>Cost</th>
-                    <th>Suggested Price</th>
+                    <th>Candidate</th>
+                    <th>Estimated Cost</th>
+                    <th>Target Market</th>
                     <th>AI Confidence</th>
-                    <th>Actions</th>
+                    <th>Decision</th>
                 </tr>
             </thead>
             <tbody id="pending-table">
-                <tr><td colspan="6">Loading...</td></tr>
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 2rem;">No candidates currently in queue.</td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -94,153 +253,130 @@
 
 {% block extra_js %}
 <script>
-// API helper with error handling
-async function apiRequest(url, options = {}) {
-    console.log('API Request:', url);
-    try {
-        const response = await fetch(url, options);
-        let data = {};
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-            data = await response.json();
+    async function apiRequest(url, options = {}) {
+        try {
+            const response = await fetch(url, options);
+            let data = await response.json();
+            if (!response.ok) throw new Error(data.detail || data.message || 'API Error');
+            return data;
+        } catch (error) {
+            console.error('API Error:', error);
+            throw error;
         }
-        if (!response.ok) {
-            throw new Error(data.detail || data.message || 'HTTP ' + response.status);
-        }
-        return data;
-    } catch (error) {
-        console.error('API Error:', error);
-        throw error;
     }
-}
 
-// Escape HTML to prevent XSS attacks
-const escapeHtml = (str) => {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-};
-
-async function loadAllProducts() {
-    console.log('Loading products...');
-    try {
-        const data = await apiRequest('/api/products/list');
+    async function loadAllProducts() {
         const tbody = document.getElementById('products-table');
+        try {
+            const data = await apiRequest('/api/products/list');
+            if (!data.products || data.products.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 3rem; color: #64748b;">No products in local database. Sync with Shopify to populate.</td></tr>';
+                return;
+            }
 
-        if (!data.products || data.products.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">No products yet. Add some!</td></tr>';
-            return;
+            tbody.innerHTML = data.products.map(p => {
+                const margin = p.selling_price > 0 ? ((p.selling_price - p.cost_price) / p.selling_price * 100).toFixed(1) : '0';
+                const statusClass = p.status === 'active' ? 'badge-active' : (p.status === 'draft' ? 'badge-draft' : 'badge-pending');
+                return `
+                <tr>
+                    <td style="font-family: monospace; color: #64748b;">#${p.id}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="img-preview" style="background-image: url('${p.image_url || ''}'); background-size: cover;"></div>
+                            <div>
+                                <div style="font-weight: 600;">${p.title}</div>
+                                <div style="font-size: 0.75rem; color: #64748b;">${p.supplier_name || 'Generic'}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="badge ${statusClass}">${p.status.toUpperCase()}</span></td>
+                    <td><div style="font-size: 0.75rem; color: #475569;">${p.category || 'Home Goods'}</div></td>
+                    <td style="font-weight: 700;">$${Number(p.selling_price || 0).toFixed(2)}</td>
+                    <td>
+                        <div style="color: ${margin > 30 ? '#10b981' : '#f59e0b'}; font-weight: 600;">${margin}%</div>
+                    </td>
+                </tr>
+            `;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 2rem;">Connectivity error: ${e.message}</td></tr>`;
         }
-
-        tbody.innerHTML = data.products.map(p => {
-            const margin = ((p.selling_price - p.cost_price) / p.selling_price * 100).toFixed(1);
-            return '<tr>' +
-                '<td>' + p.id + '</td>' +
-                '<td>' + escapeHtml(p.title || 'N/A') + '</td>' +
-                '<td><span class="badge badge-' + (p.status === 'active' ? 'approved' : 'pending') + '">' + escapeHtml(p.status) + '</span></td>' +
-                '<td>$' + Number(p.cost_price || 0).toFixed(2) + '</td>' +
-                '<td>$' + Number(p.selling_price || 0).toFixed(2) + '</td>' +
-                '<td>' + margin + '%</td>' +
-                '<td>' + escapeHtml(p.supplier_name || 'N/A') + '</td>' +
-            '</tr>';
-        }).join('');
-        
-        console.log('Loaded', data.products.length, 'products');
-    } catch (e) {
-        console.error('Failed to load products:', e);
-        const errorDiv = document.createElement('div');
-        errorDiv.textContent = 'Error: ' + e.message;
-        document.getElementById('products-table').innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;"></td></tr>';
-        document.getElementById('products-table').querySelector('td').appendChild(errorDiv);
     }
-}
 
-async function loadPending() {
-    try {
-        const data = await apiRequest('/api/products/pending');
+    async function loadPending() {
         const tbody = document.getElementById('pending-table');
-        
-        if (!data.products || data.products.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #666;">No pending products</td></tr>';
-            return;
+        try {
+            const data = await apiRequest('/api/products/pending');
+            if (!data.products || data.products.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #64748b;">Queue is empty.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.products.map(p => `
+            <tr>
+                <td style="font-weight: 600;">${p.title}</td>
+                <td>$${Number(p.cost_price || 0).toFixed(2)}</td>
+                <td>$${Number(p.suggested_price || 0).toFixed(2)}</td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="flex: 1; height: 4px; background: #e2e8f0; border-radius: 2px;">
+                            <div style="width: ${p.ai_confidence * 100}%; height: 100%; background: #6366f1; border-radius: 2px;"></div>
+                        </div>
+                        <span style="font-size: 0.7rem; color: #64748b;">${(p.ai_confidence * 100).toFixed(0)}%</span>
+                    </div>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-action" style="border-color: #10b981; color: #10b981;" onclick="approveProduct(${p.id})">APPROVE</button>
+                        <button class="btn-action" style="border-color: #ef4444; color: #ef4444;" onclick="rejectProduct(${p.id})">REJECT</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+        } catch (e) { }
+    }
+
+    async function addProduct(event) {
+        event.preventDefault();
+        const form = event.target;
+        const body = {
+            title: form.title.value,
+            description: form.description.value,
+            cost_price: parseFloat(form.cost_price.value),
+            selling_price: parseFloat(form.selling_price.value),
+            supplier_name: form.supplier_name.value,
+            supplier_url: form.supplier_url.value
+        };
+
+        try {
+            await apiRequest('/api/products/manual-add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            form.reset();
+            loadAllProducts();
+        } catch (e) {
+            alert('Injection failed: ' + e.message);
         }
-        
-        tbody.innerHTML = data.products.map(p => 
-            '<tr>' +
-                '<td>' + escapeHtml(p.title) + '</td>' +
-                '<td>' + escapeHtml(p.supplier_name || 'N/A') + '</td>' +
-                '<td>$' + (p.cost_price ? p.cost_price.toFixed(2) : '0.00') + '</td>' +
-                '<td>$' + (p.suggested_price ? p.suggested_price.toFixed(2) : '0.00') + '</td>' +
-                '<td>' + ((p.ai_confidence * 100) || 0).toFixed(0) + '%</td>' +
-                '<td>' +
-                    '<button class="btn btn-success btn-sm" onclick="approveProduct(' + p.id + ')">Approve</button> ' +
-                    '<button class="btn btn-danger btn-sm" onclick="rejectProduct(' + p.id + ')">Reject</button>' +
-                '</td>' +
-            '</tr>'
-        ).join('');
-    } catch (e) {
-        console.error('Failed to load pending:', e);
-        const errorDiv = document.createElement('div');
-        errorDiv.textContent = 'Error: ' + e.message;
-        document.getElementById('pending-table').innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;"></td></tr>';
-        document.getElementById('pending-table').querySelector('td').appendChild(errorDiv);
     }
-}
 
-async function addProduct(event) {
-    event.preventDefault();
-    const form = event.target;
-    const data = {
-        title: form.title.value,
-        description: form.description.value,
-        cost_price: parseFloat(form.cost_price.value),
-        selling_price: parseFloat(form.selling_price.value),
-        supplier_name: form.supplier_name.value,
-        supplier_url: form.supplier_url.value,
-        image_urls: [],
-        tags: []
-    };
-    
-    try {
-        await apiRequest('/api/products/manual-add', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        alert('Product added successfully!');
-        form.reset();
-        loadAllProducts();
-    } catch (e) {
-        alert('Failed to add product: ' + e.message);
+    async function approveProduct(id) {
+        try {
+            await apiRequest('/api/products/' + id + '/approve', { method: 'POST' });
+            loadPending();
+            loadAllProducts();
+        } catch (e) { alert(e.message); }
     }
-}
 
-async function approveProduct(id) {
-    if (!confirm('Approve this product?')) return;
-    try {
-        await apiRequest('/api/products/' + id + '/approve', { method: 'POST' });
-        alert('Product approved!');
-        loadPending();
-        loadAllProducts();
-    } catch (e) {
-        alert('Failed: ' + e.message);
+    async function rejectProduct(id) {
+        try {
+            await apiRequest('/api/products/' + id + '/reject', { method: 'POST' });
+            loadPending();
+        } catch (e) { }
     }
-}
 
-async function rejectProduct(id) {
-    if (!confirm('Reject this product?')) return;
-    try {
-        await apiRequest('/api/products/' + id + '/reject', { method: 'POST' });
-        loadPending();
-        loadAllProducts();
-    } catch (e) {
-        alert('Failed: ' + e.message);
-    }
-}
-
-// Initialize
-console.log('Products page loading...');
-loadAllProducts();
-loadPending();
+    loadAllProducts();
+    loadPending();
 </script>
 {% endblock %}
