@@ -281,13 +281,28 @@ class AutomaticShopifyBuilder:
             # Fetch existing product titles from Shopify to avoid duplicates
             existing_titles = set()
             try:
-                titles_resp = await client.get(
-                    f"https://{self.shop_domain}/admin/api/{self.api_version}/products.json?limit=250&fields=title",
-                    headers=headers
-                )
-                if titles_resp.status_code == 200:
-                    for ep in titles_resp.json().get("products", []):
-                        existing_titles.add(ep.get("title", "").lower().strip())
+                # Use pagination to get ALL products, not just first 250
+                limit = 250
+                url = f"https://{self.shop_domain}/admin/api/{self.api_version}/products.json?limit={limit}&fields=title"
+                
+                while url:
+                    titles_resp = await client.get(url, headers=headers)
+                    if titles_resp.status_code == 200:
+                        data = titles_resp.json()
+                        for ep in data.get("products", []):
+                            existing_titles.add(ep.get("title", "").lower().strip())
+                        
+                        # Handle Link header for pagination
+                        link_header = titles_resp.headers.get("Link", "")
+                        if 'rel="next"' in link_header:
+                            # Extract next page URL
+                            next_url = link_header.split('; rel="next"')[0].split(",")[-1].strip().strip("<>")
+                            url = next_url
+                        else:
+                            url = None
+                    else:
+                        print(f"   Warning: Could not fetch products (Status {titles_resp.status_code})")
+                        break
                 print(f"   Found {len(existing_titles)} existing products in Shopify — will skip duplicates")
             except Exception as e:
                 print(f"   Warning: Could not check existing products: {e}")
@@ -303,6 +318,8 @@ class AutomaticShopifyBuilder:
                     if p.get("image"):
                         images.append({"src": p["image"]})
                     
+                    sku = p.get("sku") or f"COAI-{int(time.time())}-{len(created):03d}"
+                    
                     shopify_payload = {
                         "product": {
                             "title": p["title"],
@@ -315,7 +332,7 @@ class AutomaticShopifyBuilder:
                                 "price": str(p.get("price", 29.99)),
                                 "compare_at_price": str(round(p.get("price", 29.99) * 1.4, 2)),
                                 "inventory_management": "shopify",
-                                "sku": p.get("sku") or f"COAI-{len(created)+1:03d}"
+                                "sku": sku
                             }],
                             "status": "active",
                             "published": True
@@ -352,26 +369,33 @@ class AutomaticShopifyBuilder:
                             cost_price=p.get("cost", 0),
                             status=ProductStatus.ACTIVE,
                             supplier_name="CJ Dropshipping" if p.get("sku", "").startswith("CJ-") else "CoaiHome",
-                            sku=p.get("sku")
+                            sku=sku
                         )
                         db.add(db_p)
                         db.commit()
 
-                        # If this is a CJ product, record the mapping for fulfillment
+                        # ── VariantMap Creation (Always) ───────────────────────────
+                        # Every product MUST have a VariantMap to prevent fulfillment crashes.
+                        # For CJ products, we use their real CJ Variant ID.
+                        # For others, we use 'MANUAL' which signals the fulfillment service
+                        # that this item requires human intervention.
+                        from models.database import VariantMap
+                        
+                        cj_vid = "MANUAL"
                         if p.get("sku", "").startswith("CJ-"):
-                            from models.database import VariantMap
                             cj_vid = p.get("sku", "").replace("CJ-", "")
-                            # Check if mapping already exists
-                            vm = db.query(VariantMap).filter(VariantMap.shopify_variant_id == str(v_id)).first()
-                            if not vm:
-                                vm = VariantMap(
-                                    shopify_variant_id=str(v_id),
-                                    cj_variant_id=cj_vid,
-                                    sku=p.get("sku"),
-                                    store_id=1
-                                )
-                                db.add(vm)
-                                db.commit()
+                        
+                        vm = db.query(VariantMap).filter(VariantMap.shopify_variant_id == str(v_id)).first()
+                        if not vm:
+                            vm = VariantMap(
+                                shopify_variant_id=str(v_id),
+                                cj_variant_id=cj_vid,
+                                sku=sku,
+                                store_id=1,
+                                active=True
+                            )
+                            db.add(vm)
+                            db.commit()
                         
                         created.append(data["product"])
                         print(f"   ✅ Published: {p['title'][:50]}")

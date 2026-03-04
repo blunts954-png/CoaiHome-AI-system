@@ -42,15 +42,8 @@ class FulfillmentService:
             if record.status not in (OrderStatus.RECEIVED, OrderStatus.FAILED):
                 return True # Already in progress
             
-            # 2. Risk check (simple max amount for auto-fulfill)
-            risk_max = float(os.getenv("RISK_AUTO_FULFILL_MAX", 300.0))
-            if record.total_price > risk_max:
-                record.status = OrderStatus.ON_HOLD
-                record.last_error = f"Order total ${record.total_price} exceeds auto-fulfill limit ${risk_max}"
-                db.commit()
-                return False
-
-            # 3. Build CJ Payload
+            # 2. Build CJ Payload
+            # We map Shopify variants to CJ variants before attempting fulfillment.
             cj_payload = await self._build_cj_payload(db, shopify_payload)
             if not cj_payload:
                 record.status = OrderStatus.FAILED
@@ -60,9 +53,17 @@ class FulfillmentService:
             
             # 4. Create CJ Order
             if self.cj.shopify_mode:
-                 record.last_error = "CJ API not configured. Cannot fulfill orders."
-                 db.commit()
-                 return False
+                record.last_error = "CJ API not configured. Cannot fulfill orders."
+                db.commit()
+                return False
+
+            # Risk check using centralized settings
+            risk_max = settings.store.max_auto_fulfill_amount
+            if record.total_price > risk_max:
+                record.status = OrderStatus.ON_HOLD
+                record.last_error = f"Order total ${record.total_price} exceeds auto-fulfill limit ${risk_max}"
+                db.commit()
+                return False
 
             resp = await self.cj.batch_create_order(cj_payload)
             if not resp.get("result"):
@@ -89,9 +90,10 @@ class FulfillmentService:
             record.status = OrderStatus.SENT_TO_CJ
             db.commit()
 
-            # 5. Start Polling for Tracking (in a separate background task usually, 
-            # but for this "turn" we'll trigger a one-off check)
-            asyncio.create_task(self.poll_and_update_tracking(order_id))
+            # MARK: Ghost in the Machine Fix
+            # We NO LONGER trigger a background task here.
+            # fulfillment_worker.py handles periodic polling for SENT_TO_CJ orders.
+            # This makes the system stateless and prevents race conditions after restarts.
             
             return True
 
@@ -115,7 +117,13 @@ class FulfillmentService:
             # Find the mapping
             vm = db.query(VariantMap).filter(VariantMap.shopify_variant_id == vid).first()
             if not vm:
+                print(f"   [!] Missing VariantMap for Shopify variant {vid}")
                 return None # Fatal: missing mapping
+            
+            # Handle manual/AI-only products
+            if vm.cj_variant_id == "MANUAL" or not vm.cj_variant_id:
+                print(f"   [!] Variant {vid} is marked for MANUAL fulfillment. Skipping auto-order.")
+                return None
             
             items.append({
                 "variantId": vm.cj_variant_id,

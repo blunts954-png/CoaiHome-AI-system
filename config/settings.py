@@ -101,6 +101,7 @@ class StoreConfig(BaseSettings):
     min_price: float = Field(default=15.0, description="Minimum product price")
     max_price: float = Field(default=500.0, description="Maximum product price")
     price_rounding: float = Field(default=0.99, description="Price rounding (e.g., 0.99)")
+    max_auto_fulfill_amount: float = Field(default=300.0, description="Max order amount for automatic fulfillment")
 
 
 class NotificationConfig(BaseSettings):
@@ -154,7 +155,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False
     )
     
     shopify: ShopifyConfig = Field(default_factory=ShopifyConfig)
