@@ -1,217 +1,251 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AI Dropshipping Automation{% endblock %}</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            background-color: #0b0f19;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.5;
         }
-        
+
         .navbar {
-            background: #1a1a2e;
-            color: white;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             padding: 1rem 2rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
-        
+
         .navbar h1 {
             font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.025em;
         }
-        
+
         .nav-links {
             display: flex;
-            gap: 1.5rem;
+            gap: 2rem;
         }
-        
+
         .nav-links a {
-            color: white;
+            color: #94a3b8;
             text-decoration: none;
-            opacity: 0.8;
-            transition: opacity 0.2s;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            position: relative;
         }
-        
+
         .nav-links a:hover {
-            opacity: 1;
+            color: #f8fafc;
         }
-        
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            width: 0%;
+            height: 2px;
+            bottom: -4px;
+            left: 0;
+            background: linear-gradient(90deg, #6366f1, #a855f7);
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 2.5rem 2rem;
         }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        
+
+        /* Glassmorphism Overrides */
+        .card,
         .stat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: rgba(30, 41, 59, 0.4) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+            color: white !important;
         }
-        
-        .stat-card h3 {
-            font-size: 0.875rem;
-            color: #666;
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
+
+        .stat-card:hover {
+            border-color: rgba(255, 255, 255, 0.15) !important;
+            background: rgba(30, 41, 59, 0.6) !important;
         }
-        
-        .stat-card .value {
-            font-size: 2rem;
-            font-weight: 600;
-            color: #1a1a2e;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-        }
-        
+
         .card-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            background: rgba(15, 23, 42, 0.3) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
         }
-        
+
         .card-header h2 {
-            font-size: 1.1rem;
+            color: #f8fafc !important;
+            font-weight: 600 !important;
         }
-        
-        .card-body {
-            padding: 1.5rem;
+
+        /* Typography overrides for dark mode */
+        h1,
+        h2,
+        h3,
+        .stat-card .value {
+            color: #f8fafc !important;
         }
-        
+
+        .stat-card h3 {
+            color: #94a3b8 !important;
+        }
+
+        /* Forms */
+        .form-control {
+            background: rgba(15, 23, 42, 0.5) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+            border-radius: 10px !important;
+            padding: 0.75rem 1rem !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .form-control:focus {
+            outline: none !important;
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+            background: rgba(15, 23, 42, 0.8) !important;
+        }
+
+        .form-group label {
+            color: #cbd5e1 !important;
+        }
+
+        /* Buttons */
         .btn {
-            padding: 0.5rem 1rem;
             border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: all 0.2s;
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.025em;
+            text-transform: uppercase;
+            font-size: 0.8rem !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            position: relative;
+            overflow: hidden;
         }
-        
+
         .btn-primary {
-            background: #4f46e5;
-            color: white;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+            color: white !important;
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3) !important;
         }
-        
+
         .btn-primary:hover {
-            background: #4338ca;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(79, 70, 229, 0.5) !important;
         }
-        
+
         .btn-success {
-            background: #10b981;
-            color: white;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            color: white !important;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2) !important;
         }
-        
+
         .btn-success:hover {
-            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4) !important;
         }
-        
-        .btn-danger {
-            background: #ef4444;
-            color: white;
+
+        .btn-secondary {
+            background: rgba(241, 245, 249, 0.1) !important;
+            color: #f8fafc !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
         }
-        
-        .btn-danger:hover {
-            background: #dc2626;
+
+        .btn-secondary:hover {
+            background: rgba(241, 245, 249, 0.2) !important;
         }
-        
-        .btn-sm {
-            padding: 0.25rem 0.75rem;
-            font-size: 0.75rem;
-        }
-        
+
+        /* Tables */
         table {
             width: 100%;
             border-collapse: collapse;
         }
-        
-        th, td {
-            text-align: left;
-            padding: 0.75rem;
-            border-bottom: 1px solid #eee;
-        }
-        
+
         th {
-            font-weight: 600;
-            color: #666;
-            font-size: 0.875rem;
+            font-weight: 600 !important;
+            color: #94a3b8 !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            padding: 1rem !important;
         }
-        
-        .badge {
-            padding: 0.25rem 0.5rem;
+
+        td {
+            color: #cbd5e1 !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
+            padding: 1rem !important;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02) !important;
+        }
+
+        /* Scrollbar styling for that extra premium feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
             border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
         }
-        
-        .badge-pending {
-            background: #fef3c7;
-            color: #92400e;
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
         }
-        
-        .badge-approved {
-            background: #d1fae5;
-            color: #065f46;
+
+        /* Specific overrides for the hero section block to blend perfectly */
+        .hero-section {
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
         }
-        
-        .badge-error {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.25rem;
-            font-weight: 500;
-            font-size: 0.875rem;
-        }
-        
-        .form-control {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 0.875rem;
-        }
-        
-        .grid-2 {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
-        }
-        
+
         @media (max-width: 768px) {
-            .grid-2 {
-                grid-template-columns: 1fr;
-            }
-            
             .nav-links {
                 display: none;
             }
@@ -219,9 +253,10 @@
     </style>
     {% block extra_css %}{% endblock %}
 </head>
+
 <body>
     <nav class="navbar">
-        <h1>🤖 AI Dropshipping Automation</h1>
+        <h1><span style="opacity: 0.5;">🤖</span> JAKE ENGINE</h1>
         <div class="nav-links">
             <a href="/">Dashboard</a>
             <a href="/products">Products</a>
@@ -229,11 +264,12 @@
             <a href="/exceptions">Exceptions</a>
         </div>
     </nav>
-    
+
     <div class="container">
         {% block content %}{% endblock %}
     </div>
-    
+
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>
