@@ -22,6 +22,38 @@ class ProductResearchAutomation:
         self.autods = get_autods_client()
         self.shopify = get_shopify_client()
         self.ai = get_ai_service()
+
+    async def _run_no_api_research(self, store_id: int, niche: str, limit: int = 10) -> Dict:
+        """Fallback research path that does not require supplier API access."""
+        _safe_print(f"🕵️  Jake Engine: Falling back to No-API research for: {niche}")
+        from automation.product_research_no_api import get_product_research_no_api
+        research_engine = get_product_research_no_api()
+        opportunities = await research_engine.research_trending_products(niche, limit=limit)
+
+        for op in opportunities:
+            p_data = {
+                "title": op.title,
+                "description": op.description,
+                "cost_price": op.cost_price,
+                "supplier_id": "aliexpress_" + str(random.randint(1000, 9999)),
+                "supplier_name": op.supplier,
+                "supplier_rating": op.rating,
+                "shipping_days": op.shipping_days,
+                "source_url": op.supplier_url,
+                "images": op.images
+            }
+            analysis = op.ai_analysis or {
+                "confidence": op.ai_score / 100,
+                "suggested_price": op.suggested_price
+            }
+            await self._queue_for_approval(store_id, [(p_data, analysis)])
+
+        return {
+            "status": "completed",
+            "message": f"Found {len(opportunities)} products in {niche}. Go to 'Products' to approve!",
+            "products_found": len(opportunities),
+            "products_selected": len(opportunities)
+        }
     
     async def run_research_job(self, store_id: int, 
                                niche: Optional[str] = None) -> Dict:
@@ -42,40 +74,8 @@ class ProductResearchAutomation:
         
         # Check if supplier API automation is available
         if self.autods.shopify_mode:
-            _safe_print(f"🕵️  Jake Engine: Falling back to No-API research for: {niche}")
-            from automation.product_research_no_api import get_product_research_no_api
-            research_engine = get_product_research_no_api()
-            
-            # Use the No-API engine to find real-ish products
-            opportunities = await research_engine.research_trending_products(niche, limit=10)
-            
-            # Queue these products for approval in the DB
-            db = SessionLocal()
-            for op in opportunities:
-                # Convert dataclass to tuple for _queue_for_approval compatibility
-                p_data = {
-                    "title": op.title,
-                    "description": op.description,
-                    "cost_price": op.cost_price,
-                    "supplier_id": "aliexpress_" + str(random.randint(1000, 9999)),
-                    "supplier_name": op.supplier,
-                    "supplier_rating": op.rating,
-                    "shipping_days": op.shipping_days,
-                    "source_url": op.supplier_url,
-                    "images": op.images
-                }
-                analysis = op.ai_analysis or {"confidence": op.ai_score/100, "suggested_price": op.suggested_price}
-                
-                await self._queue_for_approval(store_id, [(p_data, analysis)])
-            
             db.close()
-            
-            return {
-                "status": "completed",
-                "message": f"Found {len(opportunities)} products in {niche}. Go to 'Products' to approve!",
-                "products_found": len(opportunities),
-                "products_selected": len(opportunities)
-            }
+            return await self._run_no_api_research(store_id, niche, limit=10)
         
         # Check if CJ mode is active
         is_cj_mode = self.autods.provider == "cj" and not self.autods.shopify_mode
@@ -112,9 +112,24 @@ class ProductResearchAutomation:
                 country=store.target_country
             )
             if trending.get("error"):
-                raise RuntimeError(
-                    f"Supplier product search failed: {trending.get('error')}"
-                )
+                supplier_error = str(trending.get("error"))
+                _safe_print(f"⚠️  Supplier API unavailable: {supplier_error}")
+                fallback = await self._run_no_api_research(store_id, niche, limit=10)
+                result["status"] = fallback.get("status", "completed")
+                result["products_found"] = fallback.get("products_found", 0)
+                result["products_selected"] = fallback.get("products_selected", 0)
+                result["products_imported"] = 0
+                result["errors"].append(f"CJ fallback used: {supplier_error}")
+
+                job.products_found = result["products_found"]
+                job.products_selected = result["products_selected"]
+                job.products_imported = 0
+                job.status = result["status"]
+                job.error_message = f"CJ fallback used: {supplier_error}"
+                job.completed_at = datetime.utcnow()
+                db.commit()
+                db.close()
+                return result
 
             products = trending.get("products", [])
             result["products_found"] = len(products)

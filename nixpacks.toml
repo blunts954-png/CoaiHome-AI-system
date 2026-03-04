@@ -9,7 +9,7 @@ cmds = [
 nixPkgs = ["python311"]
 
 [start]
-cmd = "python main.py"
+cmd = "python init_and_run.py"
 
 [variables]
 PYTHON_VERSION = "3.11.0"

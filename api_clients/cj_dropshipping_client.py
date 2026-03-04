@@ -82,27 +82,62 @@ class CJDropshippingClient:
         
         session = await self._get_session()
         auth_url = f"{self.base_url}/authentication/getAccessToken"
-        
-        payload = {
-            "email": self.api_email,
-            "apikey": self.api_key
-        }
-        
+        auth_payloads = [
+            # Current CJ schema observed in production
+            {"email": self.api_email, "password": self.api_key},
+            # Backward compatibility fallback for older accounts
+            {"email": self.api_email, "apikey": self.api_key},
+        ]
+        auth_errors = []
+
         try:
-            async with session.post(auth_url, json=payload) as response:
-                data = await response.json()
-                
-                if response.status != 200 or not data.get("result"):
-                    error_msg = data.get("message", "Authentication failed")
-                    raise Exception(f"CJ Auth Error: {error_msg}")
-                
-                auth_data = data.get("data", {})
-                self.access_token = auth_data.get("accessToken")
-                # Token expires in 15 days, but we'll refresh after 14
-                expires_in = auth_data.get("expiresIn", 1296000)  # default 15 days
-                self.token_expires = datetime.utcnow() + timedelta(seconds=expires_in - 3600)
-                
-                return self.access_token
+            for index, payload in enumerate(auth_payloads):
+                async with session.post(auth_url, json=payload) as response:
+                    try:
+                        data = await response.json(content_type=None)
+                    except Exception:
+                        data = {"message": await response.text()}
+
+                    if response.status == 200 and data.get("result"):
+                        auth_data = data.get("data", {})
+                        token = None
+                        expires_in = 1296000
+
+                        if isinstance(auth_data, dict):
+                            token = auth_data.get("accessToken") or auth_data.get("access_token")
+                            expires_in = auth_data.get("expiresIn", expires_in)
+                        else:
+                            token = data.get("accessToken") or data.get("access_token") or data.get("token")
+
+                        if token:
+                            self.access_token = token
+                            # Token expires in 15 days, but we'll refresh after 14
+                            self.token_expires = datetime.utcnow() + timedelta(seconds=max(int(expires_in) - 3600, 60))
+                            return self.access_token
+
+                        field_name = "apikey" if "apikey" in payload else "password"
+                        auth_errors.append(f"{field_name}: authentication succeeded but no token was returned")
+                        continue
+
+                    field_name = "apikey" if "apikey" in payload else "password"
+                    error_msg = data.get("message") or data.get("error") or f"HTTP {response.status}"
+                    auth_errors.append(f"{field_name}: {error_msg}")
+
+                    # Avoid unnecessary retries against strict QPS-limited auth endpoints.
+                    if index == 0:
+                        lower_msg = str(error_msg).lower()
+                        should_try_legacy = (
+                            "apikey" in lower_msg
+                            or "api key" in lower_msg
+                            or ("password" in lower_msg and "empty" in lower_msg)
+                        )
+                        if not should_try_legacy:
+                            break
+
+            if auth_errors:
+                raise Exception(f"CJ Auth Error: {' | '.join(auth_errors)}")
+
+            raise Exception("CJ Auth Error: Authentication failed")
         except aiohttp.ClientConnectorSSLError as e:
             self._ssl_error = True
             raise Exception(f"CJ SSL Error: Unable to verify SSL certificate. "

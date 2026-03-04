@@ -16,4 +16,4 @@ RUN mkdir -p /app/data
 EXPOSE 8000
 
 # Run the application (database init happens on startup)
-CMD ["python", "main.py"]
+CMD ["python", "init_and_run.py"]
