@@ -328,7 +328,7 @@ class AutomaticShopifyBuilder:
         return "Home Organization"
     
     async def _create_all_pages(self) -> List[Dict]:
-        """Create all store pages"""
+        """Create all store pages - updates existing pages if they exist"""
         if not self.access_token:
             print("   Cannot create pages - no API access")
             return []
@@ -371,23 +371,61 @@ class AutomaticShopifyBuilder:
         created = []
         
         async with httpx.AsyncClient() as client:
+            headers = {
+                "X-Shopify-Access-Token": self.access_token,
+                "Content-Type": "application/json"
+            }
+            
+            # First, get all existing pages to check for duplicates
+            existing_pages = {}
+            try:
+                list_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/pages.json?limit=250"
+                resp = await client.get(list_url, headers=headers)
+                if resp.status_code == 200:
+                    for p in resp.json().get('pages', []):
+                        existing_pages[p.get('handle')] = p.get('id')
+            except Exception as e:
+                print(f"   Warning: Could not fetch existing pages: {e}")
+            
             for page in pages:
                 try:
-                    url = f"https://{self.shop_domain}/admin/api/{self.api_version}/pages.json"
-                    headers = {
-                        "X-Shopify-Access-Token": self.access_token,
-                        "Content-Type": "application/json"
-                    }
-                    
-                    response = await client.post(url, headers=headers, json={"page": page})
-                    
-                    if response.status_code == 201:
-                        created.append(page)
-                        print(f"   Created: {page['title']}")
-                    else:
-                        print(f"   Failed: {page['title']} - Status {response.status_code}")
-                        print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
+                    # Check if page already exists
+                    if page['handle'] in existing_pages:
+                        # Update existing page
+                        page_id = existing_pages[page['handle']]
+                        update_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/pages/{page_id}.json"
+                        response = await client.put(update_url, headers=headers, json={"page": page})
                         
+                        if response.status_code == 200:
+                            created.append(page)
+                            print(f"   Updated: {page['title']}")
+                        else:
+                            print(f"   Failed to update: {page['title']} - Status {response.status_code}")
+                    else:
+                        # Create new page
+                        url = f"https://{self.shop_domain}/admin/api/{self.api_version}/pages.json"
+                        response = await client.post(url, headers=headers, json={"page": page})
+                        
+                        if response.status_code == 201:
+                            created.append(page)
+                            print(f"   Created: {page['title']}")
+                        elif response.status_code == 422 and "handle" in response.text:
+                            # Handle race condition - fetch again and update
+                            print(f"   Page exists, fetching ID...")
+                            resp2 = await client.get(list_url, headers=headers)
+                            if resp2.status_code == 200:
+                                for p in resp2.json().get('pages', []):
+                                    if p.get('handle') == page['handle']:
+                                        update_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/pages/{p['id']}.json"
+                                        response = await client.put(update_url, headers=headers, json={"page": page})
+                                        if response.status_code == 200:
+                                            created.append(page)
+                                            print(f"   Updated: {page['title']}")
+                                        break
+                        else:
+                            print(f"   Failed: {page['title']} - Status {response.status_code}")
+                            print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
+                            
                 except Exception as e:
                     print(f"   Error: {page['title']} - {e}")
         
@@ -532,7 +570,7 @@ A: Yes! We carefully select premium materials that last.</p>"""
             return False
     
     async def _create_collections(self) -> List[Dict]:
-        """Create product collections"""
+        """Create product collections - updates existing if they exist"""
         if not self.access_token:
             print("   Cannot create collections - no API access")
             return []
@@ -544,36 +582,64 @@ A: Yes! We carefully select premium materials that last.</p>"""
             {"title": "Bathroom Organization", "handle": "bathroom"},
             {"title": "Closet Organization", "handle": "closet"},
             {"title": "Office Organization", "handle": "office"},
-            {"title": "All Products", "handle": "all"}
+            {"title": "All Products", "handle": "all-products"}  # Changed 'all' to avoid conflict
         ]
         
         created = []
         
         async with httpx.AsyncClient() as client:
+            headers = {
+                "X-Shopify-Access-Token": self.access_token,
+                "Content-Type": "application/json"
+            }
+            
+            # First, get all existing collections to check for duplicates
+            existing_collections = {}
+            try:
+                list_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/custom_collections.json?limit=250"
+                resp = await client.get(list_url, headers=headers)
+                if resp.status_code == 200:
+                    for c in resp.json().get('custom_collections', []):
+                        existing_collections[c.get('handle')] = c.get('id')
+            except Exception as e:
+                print(f"   Warning: Could not fetch existing collections: {e}")
+            
             for coll in collections:
                 try:
-                    url = f"https://{self.shop_domain}/admin/api/{self.api_version}/custom_collections.json"
-                    headers = {
-                        "X-Shopify-Access-Token": self.access_token,
-                        "Content-Type": "application/json"
-                    }
-                    
-                    collection_data = {
-                        "custom_collection": {
-                            "title": coll["title"],
-                            "handle": coll["handle"]
-                        }
-                    }
-                    
-                    response = await client.post(url, headers=headers, json=collection_data)
-                    
-                    if response.status_code == 201:
-                        created.append(coll)
-                        print(f"   Created: {coll['title']}")
-                    else:
-                        print(f"   Failed: {coll['title']} - Status {response.status_code}")
-                        print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
+                    # Check if collection already exists
+                    if coll['handle'] in existing_collections:
+                        # Update existing collection
+                        coll_id = existing_collections[coll['handle']]
+                        update_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/custom_collections/{coll_id}.json"
+                        response = await client.put(update_url, headers=headers, json={"custom_collection": coll})
                         
+                        if response.status_code == 200:
+                            created.append(coll)
+                            print(f"   Updated: {coll['title']}")
+                        else:
+                            print(f"   Failed to update: {coll['title']} - Status {response.status_code}")
+                    else:
+                        # Create new collection
+                        url = f"https://{self.shop_domain}/admin/api/{self.api_version}/custom_collections.json"
+                        collection_data = {
+                            "custom_collection": {
+                                "title": coll["title"],
+                                "handle": coll["handle"]
+                            }
+                        }
+                        
+                        response = await client.post(url, headers=headers, json=collection_data)
+                        
+                        if response.status_code == 201:
+                            created.append(coll)
+                            print(f"   Created: {coll['title']}")
+                        elif response.status_code == 422 and "handle" in response.text:
+                            # Handle race condition - just skip
+                            print(f"   Skipped: {coll['title']} (already exists)")
+                        else:
+                            print(f"   Failed: {coll['title']} - Status {response.status_code}")
+                            print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
+                            
                 except Exception as e:
                     print(f"   Error: {coll['title']} - {e}")
         

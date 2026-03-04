@@ -81,25 +81,45 @@ class AIStoreBuilder:
             
             # Step 2: Save to database for dashboard tracking
             db = SessionLocal()
-            store = Store(
-                shopify_store_id="manual_build_" + str(int(datetime.now().timestamp())),
-                shopify_domain=settings.shopify.shop_url,
-                brand_name=store_spec["brand_name"],
-                niche=store_spec["niche"],
-                target_country=store_spec.get("target_country", "US"),
-                currency="USD",
-                primary_color=store_spec.get("primary_color", "#000000"),
-                secondary_color=store_spec.get("secondary_color", "#ffffff"),
-                brand_tone=store_spec.get("brand_tone", "professional"),
-                autods_connected=False,
-                auto_fulfillment_enabled=False
-            )
-            db.add(store)
-            db.commit()
-            result["store_id"] = store.id
-            db.close()
             
-            print(f"✅ App Updated: Store ID {result['store_id']} is active.")
+            # Check if store already exists
+            existing_store = db.query(Store).filter(
+                Store.shopify_domain == settings.shopify.shop_url
+            ).first()
+            
+            if existing_store:
+                # Update existing store with new details
+                existing_store.brand_name = store_spec["brand_name"]
+                existing_store.niche = store_spec["niche"]
+                existing_store.target_country = store_spec.get("target_country", "US")
+                existing_store.primary_color = store_spec.get("primary_color", "#000000")
+                existing_store.secondary_color = store_spec.get("secondary_color", "#ffffff")
+                existing_store.brand_tone = store_spec.get("brand_tone", "professional")
+                existing_store.updated_at = datetime.utcnow()
+                db.commit()
+                result["store_id"] = existing_store.id
+                print(f"✅ App Updated: Store ID {result['store_id']} already existed, updated.")
+            else:
+                # Create new store
+                store = Store(
+                    shopify_store_id="manual_build_" + str(int(datetime.now().timestamp())),
+                    shopify_domain=settings.shopify.shop_url,
+                    brand_name=store_spec["brand_name"],
+                    niche=store_spec["niche"],
+                    target_country=store_spec.get("target_country", "US"),
+                    currency="USD",
+                    primary_color=store_spec.get("primary_color", "#000000"),
+                    secondary_color=store_spec.get("secondary_color", "#ffffff"),
+                    brand_tone=store_spec.get("brand_tone", "professional"),
+                    autods_connected=False,
+                    auto_fulfillment_enabled=False
+                )
+                db.add(store)
+                db.commit()
+                result["store_id"] = store.id
+                print(f"✅ App Updated: Store ID {result['store_id']} is active.")
+            
+            db.close()
             
         except Exception as e:
             result["status"] = "failed"

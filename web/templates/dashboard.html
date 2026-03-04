@@ -124,7 +124,7 @@
 
     .btn {
         width: 100%;
-        padding: 0.75rem 1rem;
+        padding: 0.875rem 1rem;
         border-radius: 10px;
         font-weight: 600;
         text-align: center;
@@ -134,16 +134,38 @@
         justify-content: center;
         gap: 0.5rem;
         transition: all 0.2s;
+        font-size: 0.95rem;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        color: white !important;
+        border: none;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
     }
 
     .btn-secondary {
         background: #f1f5f9;
-        color: #475569;
-        border: 1px solid #e2e8f0;
+        color: #334155;
+        border: 1px solid #cbd5e1;
+        font-weight: 600;
     }
 
     .btn-secondary:hover {
         background: #e2e8f0;
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white !important;
+        border: none;
+    }
+
+    .btn-success:hover {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
     }
 
     #system-log::-webkit-scrollbar {
@@ -153,6 +175,30 @@
     #system-log::-webkit-scrollbar-thumb {
         background: #cbd5e1;
         border-radius: 10px;
+    }
+
+    /* Improved visibility styles */
+    .stat-card h3 {
+        color: #475569;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+    }
+
+    .stat-card .value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    #system-status {
+        color: #334155 !important;
+    }
+
+    #system-status strong {
+        color: #1e293b !important;
     }
 </style>
 {% endblock %}
@@ -227,7 +273,7 @@
         </div>
         <div class="card-body" style="flex: 1; padding: 0;">
             <div id="system-log"
-                style="height: 350px; overflow-y: auto; background: #0f172a; color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 1.25rem;">
+                style="height: 350px; overflow-y: auto; background: #0f172a; color: #e2e8f0; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 0.85rem; padding: 1.25rem; line-height: 1.6;">
                 <div>[SYSTEM] Initialized. Awaiting command...</div>
             </div>
         </div>
@@ -375,9 +421,10 @@
                 logDiv.innerHTML = '';
                 logData.logs.reverse().forEach(l => {
                     const entry = document.createElement('div');
-                    entry.style.padding = '2px 0';
-                    const color = l.status === 'failed' ? '#f87171' : (l.status === 'pending' ? '#fbbf24' : '#38bdf8');
-                    entry.innerHTML = `<span style="color: #64748b;">[${l.timestamp}]</span> <span style="color: ${color};">[${l.type.toUpperCase()}]</span> ${l.message}`;
+                    entry.style.padding = '3px 0';
+                    // Brighter colors for better visibility
+                    const color = l.status === 'failed' ? '#f87171' : (l.status === 'pending' ? '#fbbf24' : '#4ade80');
+                    entry.innerHTML = `<span style="color: #94a3b8;">[${l.timestamp}]</span> <span style="color: ${color}; font-weight: bold;">[${l.type.toUpperCase()}]</span> <span style="color: #e2e8f0;">${l.message}</span>`;
                     logDiv.appendChild(entry);
                 });
                 logDiv.scrollTop = logDiv.scrollHeight;
@@ -389,8 +436,8 @@
         const logDiv = document.getElementById('system-log');
         const time = new Date().toLocaleTimeString();
         const entry = document.createElement('div');
-        entry.style.padding = '2px 0';
-        entry.innerHTML = `<span style="color: #64748b;">[${time}]</span> ${message}`;
+        entry.style.padding = '3px 0';
+        entry.innerHTML = `<span style="color: #94a3b8;">[${time}]</span> <span style="color: #e2e8f0;">${message}</span>`;
         logDiv.appendChild(entry);
         logDiv.scrollTop = logDiv.scrollHeight;
     }
