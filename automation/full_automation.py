@@ -1,7 +1,6 @@
 """
 FULL AUTOMATION ORCHESTRATOR
 Runs your entire dropshipping business on autopilot
-No AutoDS API required!
 """
 import asyncio
 import json
@@ -12,9 +11,7 @@ import time
 import threading
 
 from api_clients.shopify_client import get_shopify_client
-from api_clients.autods_browser_client import get_browser_client, AutoDSBrowserClient
 from automation.product_research_no_api import get_product_research_no_api
-from automation.tiktok_content_engine import get_tiktok_content_engine
 from automation.pricing_engine import get_pricing_engine
 from automation.fulfillment_monitor import get_fulfillment_monitor
 from automation.utils import _safe_print, get_async_runner
@@ -23,29 +20,29 @@ from config.settings import settings
 
 class FullAutomation:
     """
-    Complete Business Automation - No AutoDS API Needed
+    Complete Business Automation - Shopify + CJ Mode
     
-    This orchestrator runs:
-    1. Product Research (web scraping + AI)
-    2. Product Import (browser automation)
-    3. Pricing Optimization
-    4. Inventory Monitoring
-    5. TikTok Content Creation
-    6. Order Tracking
-    
-    Usage:
-        auto = FullAutomation()
-        await auto.run_full_setup()
-        auto.start_scheduler()  # Runs 24/7
+    Runs:
+    1. Product Research (AI-based)
+    2. Pricing Optimization
+    3. Inventory Monitoring
+    4. TikTok Content Creation
+    5. Order Tracking
     """
     
     def __init__(self):
         self.shopify = get_shopify_client()
         self.research = get_product_research_no_api()
-        self.content = get_tiktok_content_engine()
         self.pricing = get_pricing_engine()
         self.monitor = get_fulfillment_monitor()
-        self.browser_client: Optional[AutoDSBrowserClient] = None
+        self.browser_client = None  # Optional - only if playwright installed
+        
+        # Try to load TikTok engine (soft dependency)
+        try:
+            from automation.tiktok_content_engine import get_tiktok_content_engine
+            self.content = get_tiktok_content_engine()
+        except Exception:
+            self.content = None
         
         self.running = False
         self.logs = []
@@ -295,15 +292,18 @@ class FullAutomation:
     
     def start_scheduler(self):
         """
-        Start the automation scheduler
-        This runs continuously and executes tasks at scheduled times
+        Start the automation scheduler in a background thread.
+        Returns immediately — does NOT block.
         """
+        if self.running:
+            self._log("⚠️ Scheduler already running.")
+            return
+        
         self._log("⏰ Starting automation scheduler...")
         self.running = True
         
         # Schedule daily tasks
         schedule.every().day.at("09:00").do(self._run_async_task, self.daily_product_research)
-        schedule.every().day.at("10:00").do(self._run_async_task, self.import_winning_products)
         schedule.every().day.at("14:00").do(self._run_async_task, self.optimize_pricing)
         schedule.every().day.at("20:00").do(self._run_async_task, self.generate_tiktok_content)
         
@@ -311,15 +311,14 @@ class FullAutomation:
         schedule.every().hour.do(self._run_async_task, self.sync_inventory)
         schedule.every(2).hours.do(self._run_async_task, self.check_orders)
         
-        self._log("📅 Scheduled tasks:")
-        self._log("   09:00 - Product Research")
-        self._log("   10:00 - Import Products")
-        self._log("   14:00 - Pricing Optimization")
-        self._log("   20:00 - TikTok Content")
-        self._log("   Every hour - Inventory Sync")
-        self._log("   Every 2 hours - Order Check")
+        self._log("📅 Scheduled tasks active:")
+        self._log("   09:00 — Product Research")
+        self._log("   14:00 — Pricing Optimization")
+        self._log("   20:00 — TikTok Content")
+        self._log("   Hourly — Inventory Sync")
+        self._log("   Every 2 hours — Order Check")
         
-        # Run scheduler in background
+        # Background loop — does NOT block
         def run_schedule():
             while self.running:
                 schedule.run_pending()
@@ -328,13 +327,7 @@ class FullAutomation:
         thread = threading.Thread(target=run_schedule, daemon=True)
         thread.start()
         
-        self._log("✅ Scheduler running! Press Ctrl+C to stop.")
-        
-        try:
-            while self.running:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.stop_scheduler()
+        self._log("✅ Scheduler running in background.")
     
     def _run_async_task(self, task):
         """Helper to run async tasks in scheduler using persistent event loop"""
