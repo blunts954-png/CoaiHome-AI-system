@@ -10,6 +10,8 @@ import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from config.settings import settings
+from automation.resilience import resilient_api
+
 
 
 class CJDropshippingClient:
@@ -80,6 +82,7 @@ class CJDropshippingClient:
         if self.session and not self.session.closed:
             await self.session.close()
     
+    @resilient_api(max_retries=3)
     async def _get_access_token(self) -> str:
         """Get or refresh CJ API access token"""
         # Check if we have a valid token
@@ -154,6 +157,7 @@ class CJDropshippingClient:
                           f"This may be due to outdated system certificates or CJ API SSL issues. "
                           f"Error: {e}")
     
+    @resilient_api(max_retries=5, base_delay=1.0)
     async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict:
         """Make authenticated API request to CJ Dropshipping"""
         session = await self._get_session()

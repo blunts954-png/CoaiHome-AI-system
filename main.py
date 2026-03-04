@@ -434,7 +434,7 @@ async def export_products_csv():
 
                     writer.writerow([
                         handle, p.title, p.description or f"Premium {p.title}.",
-                        "CoaiHome", "Home & Garden", p.category or "Home Goods",
+                        "CoaiHome", "Home & Garden", "Home Goods",
                         "organizer, home, storage", "true",
                         "Title", "Default Title",
                         p.sku or f"COAI-{p.id:03d}", "500", "shopify",

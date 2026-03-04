@@ -881,6 +881,21 @@ header, .site-header, .header-wrapper {
                 except Exception as e:
                     print(f"   ⚠️  Menu error for '{menu['title']}': {e}")
 
+    def _strip_html(self, text: Any) -> Any:
+        """Helper to strip all HTML tags from a string or recursive structure."""
+        if isinstance(text, str):
+            import re
+            cleaned = re.sub(r'<[^>]*>', '', text, flags=re.DOTALL).strip()
+            if "<" in text and "<" not in cleaned:
+                # Log that we successfully stripped something for debugging
+                pass
+            return cleaned
+        elif isinstance(text, dict):
+            return {k: self._strip_html(v) for k, v in text.items()}
+        elif isinstance(text, list):
+            return [self._strip_html(i) for i in text]
+        return text
+
     async def _configure_homepage_template(self) -> bool:
         """
         The critical missing piece: rewrite templates/index.json on the active theme
@@ -1072,15 +1087,16 @@ header, .site-header, .header-wrapper {
 
                     sec["settings"] = sett
 
-                tmpl["sections"] = sections
+                # 5. Aggressively strip ALL HTML from the entire template to avoid 422 errors
+                clean_tmpl = self._strip_html(tmpl)
 
-                # 5. Write the modified template back
+                # 6. Write the modified template back
                 write_resp = await client.put(
                     f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
                     headers=headers,
                     json={"asset": {
                         "key": "templates/index.json",
-                        "value": json.dumps(tmpl, indent=2)
+                        "value": json.dumps(clean_tmpl, indent=2)
                     }}
                 )
 
@@ -1099,12 +1115,18 @@ header, .site-header, .header-wrapper {
                             for sk, sv in ann_data.get("sections", {}).items():
                                 for bk, bv in sv.get("blocks", {}).items():
                                     bv.setdefault("settings", {})
-                                    bv["settings"]["text"] = "<p>🚚 FREE SHIPPING on orders over $50 | Use code ORGANIZE10 for 10% off your first order!</p>"
+                                    bv["settings"]["text"] = "🚚 FREE SHIPPING on orders over $50 | Use code ORGANIZE10 for 10% off your first order!"
+                            # Strip HTML from announcement bar data too
+                            clean_ann = self._strip_html(ann_data)
                             await client.put(
                                 f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
                                 headers=headers,
-                                json={"asset": {"key": "sections/announcement-bar.json", "value": json.dumps(ann_data, indent=2)}}
+                                json={"asset": {
+                                    "key": "sections/announcement-bar.json",
+                                    "value": json.dumps(clean_ann, indent=2)
+                                }}
                             )
+                        print("   ✅ Theme layout and assets cleaned of HTML tags")
                     except Exception:
                         pass
 

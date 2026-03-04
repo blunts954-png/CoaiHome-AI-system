@@ -8,6 +8,8 @@ import httpx
 from config.settings import settings
 from models.database import SessionLocal, Product, OrderException
 from services.shopify_oauth_store import get_any_installation, get_installation
+from automation.resilience import resilient_api
+
 
 
 class ShopifyClient:
@@ -46,6 +48,7 @@ class ShopifyClient:
             "Missing Shopify access token. Set SHOPIFY_ACCESS_TOKEN or install app via /auth/shopify/install."
         )
 
+    @resilient_api(max_retries=5, base_delay=1.0)
     async def gql(self, query: str, variables: Optional[Dict] = None) -> Dict:
         """Make an authenticated GraphQL request to Shopify"""
         if not self.shop_url:
@@ -73,6 +76,7 @@ class ShopifyClient:
                 raise RuntimeError(f"Shopify GraphQL Error: {data['errors']}")
             return data.get("data", {})
 
+    @resilient_api(max_retries=5, base_delay=1.0)
     async def _request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
         """Make an authenticated request to Shopify API"""
         if not self.base_url:

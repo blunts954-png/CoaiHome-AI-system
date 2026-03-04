@@ -348,6 +348,17 @@ class OrderStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class TikTokOrderStatus(str, enum.Enum):
+    UNPAID = "unpaid"
+    AWAITING_SHIPMENT = "awaiting_shipment"
+    AWAITING_COLLECTION = "awaiting_collection"
+    IN_TRANSIT = "in_transit"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+
 class ShopifyOrder(Base):
     """Tracks the end-to-end fulfillment of a Shopify order via CJ."""
     __tablename__ = "shopify_orders"
@@ -371,7 +382,7 @@ class ShopifyOrder(Base):
 
 class VariantMap(Base):
     """
-    The critical mapping between Shopify variants and CJ supplier variants.
+    Backwards compatibility: Links Shopify variants to CJ supplier variants.
     """
     __tablename__ = "variant_map"
     
@@ -384,6 +395,58 @@ class VariantMap(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class GlobalVariantMapping(Base):
+    """
+    The 'Nervous System' core: Polyglot mapping for multi-channel sync.
+    """
+    __tablename__ = "global_variant_mappings"
+
+    id = Column(Integer, primary_key=True)
+    master_sku = Column(String(255), unique=True, index=True)
+    
+    # CJ (The Source)
+    cj_product_id = Column(String(255), index=True)
+    cj_variant_id = Column(String(255), index=True)
+    
+    # Shopify
+    shopify_product_id = Column(String(255), index=True)
+    shopify_variant_id = Column(String(255), index=True)
+    
+    # TikTok Shop
+    tt_shop_product_id = Column(String(255), index=True)
+    tt_shop_variant_id = Column(String(255), index=True)
+    
+    # Status & Buffers
+    active = Column(Boolean, default=True)
+    inventory_buffer = Column(Integer, default=5) # Prevent overselling
+    last_known_inventory = Column(Integer, default=0)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TikTokShopOrder(Base):
+    """Tracks orders coming from TikTok Shop directly."""
+    __tablename__ = "tiktok_shop_orders"
+
+    id = Column(Integer, primary_key=True)
+    tt_order_id = Column(String(255), unique=True, index=True, nullable=False)
+    store_id = Column(Integer, ForeignKey("stores.id"))
+    
+    status = Column(Enum(TikTokOrderStatus), default=TikTokOrderStatus.AWAITING_SHIPMENT)
+    cj_order_id = Column(String(255), nullable=True) # Linked CJ order
+    
+    total_amount = Column(Float)
+    customer_name = Column(String(255))
+    
+    tracking_number = Column(String(255), nullable=True)
+    ship_by_date = Column(DateTime)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
 
 class ShopifyOAuthState(Base):

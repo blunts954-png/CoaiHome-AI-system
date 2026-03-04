@@ -152,8 +152,13 @@ class AutoDSClient:
                 images = [value]
                 break
 
+        # Try to get variants or a single variant ID
+        variants = product.get("variants") or []
+        first_vid = product.get("vid") or (variants[0].get("vid") if variants else "")
+
         return {
             "id": product_id,
+            "vid": first_vid,
             "source_url": f"https://www.cjdropshipping.com/product/{product_id}.html" if product_id else "",
             "title": title,
             "description": product.get("description") or product.get("productDescription") or "",
@@ -162,7 +167,8 @@ class AutoDSClient:
             "supplier_name": "CJ Dropshipping",
             "supplier_rating": supplier_rating,
             "shipping_days": shipping_days,
-            "images": images
+            "images": images,
+            "variants": variants
         }
     
     # ============ AI Store Builder (SHOPIFY MODE) ============
@@ -330,12 +336,19 @@ class AutoDSClient:
             }
             
             result = await shopify.create_product(shopify_product)
-            shopify_product_id = result.get("product", {}).get("id")
+            shopify_product_rec = result.get("product", {})
+            shopify_product_id = shopify_product_rec.get("id")
+            shopify_variants = shopify_product_rec.get("variants", [])
+            shopify_variant_id = shopify_variants[0].get("id") if shopify_variants else None
+            
             supplier_product_id = product_data.get("source_id") or product_data.get("supplier_product_id")
+            supplier_variant_id = product_data.get("source_vid") or product_data.get("vid")
             
             return {
                 "success": True,
                 "shopify_product_id": shopify_product_id,
+                "shopify_variant_id": shopify_variant_id,
+                "supplier_variant_id": supplier_variant_id,
                 # Keep this field for compatibility with existing DB columns/workflows
                 "autods_product_id": supplier_product_id or shopify_product_id,
                 "message": (

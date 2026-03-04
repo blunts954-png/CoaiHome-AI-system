@@ -244,7 +244,7 @@ class ProductResearchAutomation:
                 title=product_data.get("title"),
                 description=product_data.get("description"),
                 cost_price=product_data.get("cost_price", 0),
-                suggested_price=analysis.get("suggested_price", 0),
+                selling_price=analysis.get("suggested_price", 0), # Store the calculated price
                 supplier_id=product_data.get("supplier_id"),
                 supplier_name=product_data.get("supplier_name"),
                 supplier_rating=product_data.get("supplier_rating"),
@@ -260,10 +260,11 @@ class ProductResearchAutomation:
         
         db.commit()
         db.close()
-    
+
     async def _import_products(self, store_id: int, store, 
                                products: List[tuple]) -> int:
-        """Import products to Shopify via AutoDS"""
+        """Import products to Shopify and establish mapping"""
+        from models.database import GlobalVariantMapping, VariantMap
         imported_count = 0
         db = SessionLocal()
         
@@ -278,51 +279,76 @@ class ProductResearchAutomation:
                 # Prepare import data
                 import_data = {
                     "source_id": product_data.get("id"),
+                    "source_vid": product_data.get("vid"),
                     "source_url": product_data.get("source_url"),
                     "title": content.get("title", product_data.get("title")),
                     "description": content.get("description_html", product_data.get("description")),
                     "cost_price": product_data.get("cost_price"),
-                    "markup": analysis.get("suggested_markup", settings.store.base_markup),
+                    "suggested_price": analysis.get("suggested_price", 0),
                     "tags": content.get("tags", []),
                     "image_urls": product_data.get("images", [])
                 }
                 
-                # Trigger AutoDS import
+                # Trigger Import
                 result = await self.autods.import_product(
                     import_data,
                     store.shopify_domain
                 )
                 
                 if result.get("success"):
-                    # Save to database
+                    sh_prod_id = result.get("shopify_product_id")
+                    sh_var_id = result.get("shopify_variant_id")
+                    cj_var_id = result.get("supplier_variant_id") or product_data.get("vid")
+                    
+                    # Save Product Record
                     product = Product(
                         store_id=store_id,
-                        shopify_product_id=result.get("shopify_product_id"),
+                        shopify_product_id=str(sh_prod_id),
+                        shopify_variant_id=str(sh_var_id) if sh_var_id else None,
                         autods_product_id=result.get("autods_product_id"),
                         title=import_data["title"],
                         description=import_data["description"],
                         cost_price=import_data["cost_price"],
-                        selling_price=analysis.get("suggested_price", 0),
+                        selling_price=import_data["suggested_price"],
                         supplier_id=product_data.get("supplier_id"),
                         supplier_name=product_data.get("supplier_name"),
-                        supplier_rating=product_data.get("supplier_rating"),
-                        shipping_days=product_data.get("shipping_days"),
-                        ai_import_confidence=analysis.get("confidence", 0),
-                        ai_research_data={
-                            "source_data": product_data,
-                            "analysis": analysis
-                        },
                         status=ProductStatus.ACTIVE
                     )
                     db.add(product)
+                    
+                    # Store critical mapping for fulfillment automation
+                    if sh_var_id and cj_var_id:
+                        sku = f"COAI-{product_data.get('id')}"
+                        
+                        # 1. Backwards compatibility mapping
+                        v_map = VariantMap(
+                            store_id=store_id,
+                            shopify_variant_id=str(sh_var_id),
+                            cj_variant_id=str(cj_var_id),
+                            sku=sku
+                        )
+                        db.add(v_map)
+                        
+                        # 2. Modern 'Nervous System' Cluster Mapping
+                        g_map = GlobalVariantMapping(
+                            master_sku=sku,
+                            cj_product_id=str(product_data.get("id")),
+                            cj_variant_id=str(cj_var_id),
+                            shopify_product_id=str(sh_prod_id),
+                            shopify_variant_id=str(sh_var_id),
+                            active=True
+                        )
+                        db.add(g_map)
+
                     imported_count += 1
                     
             except Exception as e:
-                _safe_print(f"Failed to import product {product_data.get('id')}: {e}")
+                print(f"Failed to import product {product_data.get('id')}: {e}")
         
         db.commit()
         db.close()
         return imported_count
+
     
     async def approve_pending_product(self, product_id: int) -> Dict:
         """Manually approve a pending product for import"""
