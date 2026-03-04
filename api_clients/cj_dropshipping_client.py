@@ -6,6 +6,7 @@ API Docs: https://developers.cjdropshipping.com/
 import asyncio
 import aiohttp
 import ssl
+import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from config.settings import settings
@@ -15,20 +16,29 @@ class CJDropshippingClient:
     """Client for CJ Dropshipping API 2.0"""
     
     def __init__(self):
-        # Parse API credentials from token string
-        # Format: email@api@key or just the token directly
-        self.api_token = settings.cj.api_token
-        self.api_email = settings.cj.api_email
-        self.api_key = settings.cj.api_key
+        # Read token directly from env var first (most reliable on Railway)
+        raw_token = (
+            os.getenv("CJ_API_TOKEN", "").strip()
+            or settings.cj.api_token.strip()
+        )
+        self.api_token = raw_token
+        self.api_email = (os.getenv("CJ_API_EMAIL", "") or settings.cj.api_email or "").strip()
+        self.api_key = (os.getenv("CJ_API_KEY", "") or settings.cj.api_key or "").strip()
         
-        # If token contains @api@, parse it
+        # If combined token contains @api@, parse it
         if self.api_token and "@api@" in self.api_token:
             parts = self.api_token.split("@api@")
             if len(parts) == 2:
-                self.api_email = parts[0]
-                self.api_key = parts[1]
+                if not self.api_email:
+                    self.api_email = parts[0].strip()
+                if not self.api_key:
+                    self.api_key = parts[1].strip()
         
-        self.base_url = (settings.cj.base_url or "https://developers.cjdropshipping.com/api2.0/v1").rstrip("/")
+        # Debug print so we can see in Railway logs whether credentials loaded
+        masked_key = (self.api_key[:6] + "...") if self.api_key and len(self.api_key) > 6 else "(empty)"
+        print(f"CJ Client Init: email={self.api_email or '(empty)'}, key={masked_key}")
+        
+        self.base_url = (os.getenv("CJ_BASE_URL") or settings.cj.base_url or "https://developers.cjdropshipping.com/api2.0/v1").rstrip("/")
         self.default_country = settings.cj.default_country
         self.access_token: Optional[str] = None
         self.token_expires: Optional[datetime] = None
