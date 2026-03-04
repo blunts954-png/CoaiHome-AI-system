@@ -77,9 +77,9 @@ class AIConfig(BaseSettings):
     # Business Guardrails
     max_price_change_percent: float = Field(default=10.0, description="Max daily price change %")
     min_profit_margin: float = Field(default=30.0, description="Minimum profit margin %")
-    max_products_per_day: int = Field(default=5, description="Max new products to import daily")
+    max_products_per_day: int = Field(default=15, description="Max new products to import daily")
     min_product_rating: float = Field(default=4.0, description="Minimum supplier rating")
-    max_shipping_days: int = Field(default=14, description="Maximum shipping time in days")
+    max_shipping_days: int = Field(default=21, description="Maximum shipping time in days")
 
 
 class StoreConfig(BaseSettings):
@@ -178,11 +178,12 @@ class Settings(BaseSettings):
         if db_url_env is not None:
             # Clean possible quotes or template brackets
             db_url_env = db_url_env.strip(' "\'')
-            if "${{" in db_url_env:
-                # This is a template placeholder, ignore it and use default
-                pass
-            elif db_url_env:
-                self.system.database_url = db_url_env
+            if db_url_env and "${{" not in db_url_env:
+                self.system.database_url = db_url_env.strip(' "\'')
+            else:
+                # Ensure we don't have an empty string
+                if not self.system.database_url:
+                    self.system.database_url = "sqlite:///./dropshipping_ai.db"
         
         return self
 
