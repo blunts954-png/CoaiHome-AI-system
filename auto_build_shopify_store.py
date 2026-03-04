@@ -882,13 +882,18 @@ header, .site-header, .header-wrapper {
                     print(f"   ⚠️  Menu error for '{menu['title']}': {e}")
 
     def _strip_html(self, text: Any) -> Any:
-        """Helper to strip all HTML tags from a string or recursive structure."""
+        """
+        Helper to strip UNSUPPORTED HTML tags while preserving basic rich-text tags
+        required by Shopify for rich_text settings (p, ul, li, etc).
+        """
         if isinstance(text, str):
             import re
-            cleaned = re.sub(r'<[^>]*>', '', text, flags=re.DOTALL).strip()
-            if "<" in text and "<" not in cleaned:
-                # Log that we successfully stripped something for debugging
-                pass
+            # Only strip tags that aren't in the "safe" list for Shopify rich_text
+            # Allowed: p, ul, ol, li, h1-h6, b, i, strong, em, a, br
+            safe_tags = r'p|ul|ol|li|h[1-6]|b|i|strong|em|a|br'
+            # This regex matches tags that are NOT in the safe list
+            pattern = rf'<(?!/?({safe_tags})\b)[^>]*>'
+            cleaned = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL).strip()
             return cleaned
         elif isinstance(text, dict):
             return {k: self._strip_html(v) for k, v in text.items()}
@@ -985,7 +990,7 @@ header, .site-header, .header-wrapper {
                     if sec_type in ("image-banner", "slideshow", "banner", "hero", "image-with-text"):
                         if sec_type == "image-with-text":
                              sett["heading"] = "Quality Home Essentials"
-                             sett["text"] = "Discover premium home organization solutions for every room in your home."
+                             sett["text"] = "<p>Discover premium home organization solutions for every room in your home.</p>"
                         else:
                             sett["heading"]    = "Organize Every Corner of Your Home"
                             sett["heading_size"] = "h1"
@@ -997,8 +1002,9 @@ header, .site-header, .header-wrapper {
                             if btype in ("heading", "title"):
                                 bv["settings"]["heading"] = "Organize Every Corner of Your Home"
                             elif btype in ("text", "caption"):
-                                # Shopify JSON templates often reject HTML tags in plain text fields
-                                bv["settings"]["text"] = "Premium home organization products — kitchen, bathroom, closet & office"
+                                # Shopify JSON templates often reject HTML tags in plain text fields, 
+                                # BUT rich_text sections REQUIRE top-level <p> tags.
+                                bv["settings"]["text"] = "<p>Premium home organization products — kitchen, bathroom, closet & office</p>"
                             elif btype == "buttons":
                                 bv["settings"]["button_label_1"] = "Shop All"
                                 bv["settings"]["button_link_1"] = "/collections/all-products"
@@ -1015,10 +1021,10 @@ header, .site-header, .header-wrapper {
                         for bk, bv in sec.get("blocks", {}).items():
                             bv.setdefault("settings", {})
                             if bv.get("type") == "text":
-                                bv["settings"]["text"] = "Discover premium home organization solutions for every room in your home. Free shipping on orders over $50."
+                                bv["settings"]["text"] = "<p>Discover premium home organization solutions for every room in your home. Free shipping on orders over $50.</p>"
                         # Fallback if theme uses section-level setting
-                        if "text" in sett: sett["text"] = "Welcome to CoaiHome"
-                        if "content" in sett: sett["content"] = "Welcome to CoaiHome"
+                        if "text" in sett: sett["text"] = "<p>Welcome to CoaiHome</p>"
+                        if "content" in sett: sett["content"] = "<p>Welcome to CoaiHome</p>"
 
                     # ─── Collection list / featured categories ─────────────────
                     elif sec_type in (
@@ -1081,9 +1087,9 @@ header, .site-header, .header-wrapper {
                             bv.setdefault("settings", {})
                             if i < len(features):
                                 bv["settings"]["heading"]     = features[i][0]
-                                bv["settings"]["text"]        = features[i][1]
+                                bv["settings"]["text"]        = f"<p>{features[i][1]}</p>"
                                 if "description" in bv["settings"]:
-                                    bv["settings"]["description"] = features[i][1]
+                                    bv["settings"]["description"] = f"<p>{features[i][1]}</p>"
 
                     sec["settings"] = sett
 
