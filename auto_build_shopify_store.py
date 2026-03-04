@@ -153,6 +153,7 @@ class AutomaticShopifyBuilder:
                     return True
                 else:
                     print(f"   ERROR: Token rejected by Shopify — Status {response.status_code}")
+                    print(f"   Response: {response.text[:200] if response.text else 'No response body'}")
                     print(f"   Check that SHOPIFY_ACCESS_TOKEN in Railway is still valid.")
                     return False
         except Exception as e:
@@ -197,9 +198,17 @@ class AutomaticShopifyBuilder:
         # Get products that haven't been pushed to Shopify yet
         products = db.query(Product).filter(Product.shopify_product_id == None).all()
         
-        # If no new products, maybe just take the first 15 for a fresh store
+        # If no new products, we need to get products WITHOUT shopify_product_id
+        # Don't use synced products as they already exist in Shopify!
         if not products:
-             products = db.query(Product).limit(15).all()
+            print("   No products without shopify_product_id found.")
+            print("   IMPORTANT: Sync operation populates shopify_product_id.")
+            print("   For a fresh store, you need products that don't exist in Shopify yet.")
+            print("   Either:")
+            print("   1. Run product research to add NEW products to the database")
+            print("   2. Or manually clear shopify_product_id from products you want to re-push")
+            db.close()
+            return []
              
         db.close()
         
@@ -289,7 +298,8 @@ class AutomaticShopifyBuilder:
                         print(f"   Created & Stocked: {product.title[:40]}...")
                         
                     else:
-                        print(f"   Failed: {product.title[:40]}... - {response.status_code}")
+                        print(f"   Failed: {product.title[:40]}... - Status {response.status_code}")
+                        print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
                     
                     # Rate limiting: 1 second sleep between products
                     await asyncio.sleep(1)
@@ -375,7 +385,8 @@ class AutomaticShopifyBuilder:
                         created.append(page)
                         print(f"   Created: {page['title']}")
                     else:
-                        print(f"   Failed: {page['title']} - {response.status_code}")
+                        print(f"   Failed: {page['title']} - Status {response.status_code}")
+                        print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
                         
                 except Exception as e:
                     print(f"   Error: {page['title']} - {e}")
@@ -560,7 +571,8 @@ A: Yes! We carefully select premium materials that last.</p>"""
                         created.append(coll)
                         print(f"   Created: {coll['title']}")
                     else:
-                        print(f"   Failed: {coll['title']} - {response.status_code}")
+                        print(f"   Failed: {coll['title']} - Status {response.status_code}")
+                        print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
                         
                 except Exception as e:
                     print(f"   Error: {coll['title']} - {e}")

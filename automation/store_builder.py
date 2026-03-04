@@ -104,11 +104,6 @@ class AIStoreBuilder:
         except Exception as e:
             result["status"] = "failed"
             result["errors"].append(str(e))
-            print(f"❌ App Error: {e}")
-            
-        except Exception as e:
-            result["status"] = "failed"
-            result["errors"].append(str(e))
             print(f"❌ Store creation failed: {e}")
         
         return result
