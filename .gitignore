@@ -20,6 +20,8 @@ ENV/
 # Logs
 logs/*.log
 *.log
+debug_log.txt
+test_out.txt
 
 # IDE
 .vscode/

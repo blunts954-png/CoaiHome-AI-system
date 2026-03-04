@@ -171,35 +171,7 @@ class AutoDSClient:
             "variants": variants
         }
     
-    # ============ AI Store Builder (SHOPIFY MODE) ============
-    
-    async def create_ai_store(self, store_spec: Dict) -> Dict:
-        """In Shopify mode: Create store structure via Shopify"""
-        if not self.shopify_mode:
-            # Would call real AutoDS API here
-            pass
-        
-        # Shopify-only mode: Return mock job, actual store created via Shopify OAuth
-        return {
-            "job_id": f"mock_{datetime.utcnow().timestamp()}",
-            "status": "completed",
-            "message": "SHOPIFY MODE: Store created via Shopify. AutoDS features require API key.",
-            "store_data": {
-                "shopify_domain": settings.shopify.shop_url,
-                "shopify_store_id": "manual_setup_required"
-            }
-        }
-    
-    async def get_store_builder_status(self, job_id: str) -> Dict:
-        """Return completed status for Shopify mode"""
-        return {
-            "status": "completed",
-            "store_data": {
-                "shopify_domain": settings.shopify.shop_url,
-                "shopify_store_id": "manual_setup"
-            }
-        }
-    
+
     # ============ Product Research (MANUAL/SHOPIFY MODE) ============
     
     async def search_products(self, query: str, filters: Optional[Dict] = None) -> Dict:

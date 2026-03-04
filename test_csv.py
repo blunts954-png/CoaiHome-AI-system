@@ -5,6 +5,8 @@ from main import export_products_csv
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
+__test__ = False
+
 async def test_csv_export():
     print("🧪 Testing CSV Export Logic...")
     try:

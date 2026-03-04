@@ -55,7 +55,7 @@ OAuth flow is complicated. Here's the **easier way** to get API access.
 ### Step 7: Run Auto Builder
 ```bash
 cd dropshipping_ai_system
-python auto_build_shopify_store.py
+python build_complete_store.py
 ```
 
 **BOOM! Your store will be built automatically!**

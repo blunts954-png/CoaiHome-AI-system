@@ -333,25 +333,82 @@ async def health_check():
     return health
 
 
-# ============ API Routes - Store Builder ============
+async def _run_store_build_job(store_spec: Dict[str, Any]) -> None:
+    """
+    Run the full store builder in background and keep Store metadata aligned.
+    """
+    from datetime import datetime
+    from build_complete_store import CompleteStoreBuilder
+    from models.database import SessionLocal, Store
+
+    brand_name = (store_spec.get("brand_name") or settings.store.brand_name or "CoaiHome").strip()
+    niche = (store_spec.get("niche") or settings.store.niche or "home organization").strip()
+    target_country = (store_spec.get("target_country") or "US").strip() or "US"
+    brand_tone = (store_spec.get("brand_tone") or settings.store.brand_tone or "professional").strip()
+    primary_color = store_spec.get("primary_color") or "#000000"
+    secondary_color = store_spec.get("secondary_color") or "#ffffff"
+    domain = (settings.shopify.shop_url or "").strip()
+
+    try:
+        builder = CompleteStoreBuilder()
+        builder.store_data["brand_name"] = brand_name
+        builder.store_data["niche"] = niche
+        if domain:
+            builder.store_data["domain"] = domain
+        results = await builder.build_entire_store()
+        _safe_log(f"Store build task completed with status: {results.get('status', 'unknown')}")
+    except Exception as e:
+        _safe_log(f"Store build task failed: {e}")
+
+    db = SessionLocal()
+    try:
+        if not domain:
+            _safe_log("Store build metadata skipped: SHOPIFY_SHOP_URL is not configured.")
+            return
+
+        store = db.query(Store).filter(Store.shopify_domain == domain).first()
+        if store:
+            store.brand_name = brand_name
+            store.niche = niche
+            store.target_country = target_country
+            store.brand_tone = brand_tone
+            store.primary_color = primary_color
+            store.secondary_color = secondary_color
+            store.updated_at = datetime.utcnow()
+        else:
+            store = Store(
+                shopify_store_id=f"manual_build_{int(datetime.utcnow().timestamp())}",
+                shopify_domain=domain,
+                brand_name=brand_name,
+                niche=niche,
+                target_country=target_country,
+                currency="USD",
+                primary_color=primary_color,
+                secondary_color=secondary_color,
+                brand_tone=brand_tone,
+                autods_connected=False,
+                auto_fulfillment_enabled=False
+            )
+            db.add(store)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        _safe_log(f"Store metadata sync failed: {e}")
+    finally:
+        db.close()
+
+
+# ============ API Routes - Store Data ============
 
 @app.post("/api/stores/create")
 async def create_store(spec: StoreSpec, background_tasks: BackgroundTasks):
-    """Create a new AI-built store in the background"""
-    from automation.store_builder import get_store_builder
-    builder = get_store_builder()
-    
-    # Run in background as it takes minutes
-    # We return a standard response immediately
-    background_tasks.add_task(builder.create_store_from_spec, spec.dict())
-    
+    """Create/update store structure in the background."""
+    background_tasks.add_task(_run_store_build_job, spec.dict())
     return {
         "status": "started",
-        "message": f"🏗️ Jake Engine: Building {spec.brand_name} in the background. Check your store in 3-5 minutes!",
+        "message": f"Store build started for {spec.brand_name}. Check back in 3-5 minutes.",
         "brand_name": spec.brand_name
     }
-
-
 
 @app.post("/api/system/sync-shopify")
 async def sync_shopify_data(background_tasks: BackgroundTasks):
@@ -1296,13 +1353,30 @@ async def generate_store_redesign(request: RedesignRequest):
 
 @app.post("/api/store/update-branding")
 async def update_store_branding(store_id: int, branding: Dict[str, Any]):
-    """Update store branding colors and tone"""
-    from automation.store_builder import get_store_builder
-    
-    builder = get_store_builder()
-    result = await builder.update_store_branding(store_id, branding)
-    return result
+    """Update store branding colors and tone."""
+    from datetime import datetime
+    from models.database import SessionLocal, Store
 
+    db = SessionLocal()
+    try:
+        store = db.query(Store).filter(Store.id == store_id).first()
+        if not store:
+            raise HTTPException(status_code=404, detail="Store not found")
+
+        if branding.get("primary_color"):
+            store.primary_color = branding["primary_color"]
+        if branding.get("secondary_color"):
+            store.secondary_color = branding["secondary_color"]
+        if branding.get("brand_tone"):
+            store.brand_tone = branding["brand_tone"]
+        if branding.get("brand_name"):
+            store.brand_name = branding["brand_name"]
+
+        store.updated_at = datetime.utcnow()
+        db.commit()
+        return {"status": "success", "store_id": store.id}
+    finally:
+        db.close()
 
 # ============ API Routes - System ============
 

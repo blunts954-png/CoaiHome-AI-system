@@ -31,7 +31,7 @@ SHOPIFY_ACCESS_TOKEN=
 ### Step 3: Launch
 Once you've updated the `.env`, run:
 ```bash
-python auto_build_shopify_store.py
+python build_complete_store.py
 ```
 
 The system will now talk to Shopify using the modern `client_credentials` grant, fetch its own token, and start building your store immediately.

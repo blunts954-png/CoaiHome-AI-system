@@ -1,9 +1,24 @@
 import asyncio
 import sys
 
+__test__ = False
+
 def dprint(msg):
     with open("debug_log.txt", "a", encoding="utf-8") as f:
         f.write(msg + "\n")
+
+
+async def close_cj_session_if_open():
+    """Close shared CJ aiohttp session to avoid unclosed-session warnings on exit."""
+    try:
+        import api_clients.cj_dropshipping_client as cj_module
+        client = getattr(cj_module, "_cj_client", None)
+        if client:
+            await client.close()
+            dprint("CJ client session closed.")
+    except Exception as e:
+        dprint(f"CJ session close warning: {e}")
+
 
 dprint("Importing modules...")
 from automation.product_research import get_product_research
@@ -45,6 +60,8 @@ async def test_research():
         dprint(f"BASE EXCEPTION: {e}")
         with open("debug_log.txt", "a", encoding="utf-8") as f:
             traceback.print_exc(file=f)
+    finally:
+        await close_cj_session_if_open()
 
 if __name__ == "__main__":
     with open("debug_log.txt", "w", encoding="utf-8") as f:
