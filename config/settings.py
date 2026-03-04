@@ -59,6 +59,7 @@ class CJConfig(BaseSettings):
     default_country: str = Field(default="US", description="Default shipping country")
     auto_import_enabled: bool = Field(default=True, description="Enable auto product import from CJ")
     auto_fulfillment_enabled: bool = Field(default=True, description="Enable order handling via CJ APIs")
+    auto_pricing_enabled: bool = Field(default=True, description="Enable automated pricing rules")
 
 
 class AIConfig(BaseSettings):
