@@ -118,53 +118,47 @@ class AutomaticShopifyBuilder:
         return results
     
     async def _get_access_token(self) -> bool:
-        """Get or refresh access token using client_credentials grant (New in 2026)"""
+        """Use the existing SHOPIFY_ACCESS_TOKEN — no OAuth flow needed."""
         from config.settings import settings
         import httpx
         
-        # Bypassing SSL for this manual script if configured
         verify_ssl = os.getenv("SHOPIFY_SSL_VERIFY", "true").lower() == "true"
 
-        # 1. Try existing token first
-        if self.access_token or settings.shopify.access_token:
-            self.access_token = self.access_token or settings.shopify.access_token
-            try:
-                url = f"https://{self.shop_domain}/admin/api/{self.api_version}/shop.json"
-                headers = {"X-Shopify-Access-Token": self.access_token}
-                async with httpx.AsyncClient(verify=verify_ssl) as client:
-                    response = await client.get(url, headers=headers)
-                    if response.status_code == 200:
-                        return True
-            except:
-                pass
-
-        # 2. Acquire new token via client_credentials (2026 Flow)
-        if not SHOPIFY_API_KEY or not SHOPIFY_API_SECRET:
-            print("   WARNING: Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET")
+        # Use the token from env/settings directly
+        token = settings.shopify.access_token or os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+        if not token:
+            print("   ERROR: SHOPIFY_ACCESS_TOKEN is not set in Railway environment variables.")
+            print("   Go to Railway > Your Project > Variables and add SHOPIFY_ACCESS_TOKEN")
             return False
 
-        print("   Acquiring new 2026 access token...")
-        token_url = f"https://{self.shop_domain}/admin/oauth/access_token"
-        payload = {
-            "client_id": SHOPIFY_API_KEY,
-            "client_secret": SHOPIFY_API_SECRET,
-            "grant_type": "client_credentials"
-        }
+        self.access_token = token
+
+        # Use shop_url from settings, fallback to env var directly
+        shop = settings.shopify.shop_url or os.getenv("SHOPIFY_SHOP_URL", "")
+        if not shop:
+            print("   ERROR: SHOPIFY_SHOP_URL is not set in Railway environment variables.")
+            return False
         
+        self.shop_domain = shop
+
+        # Verify the token works against the actual store
         try:
-            async with httpx.AsyncClient(verify=verify_ssl) as client:
-                response = await client.post(token_url, data=payload)
+            url = f"https://{self.shop_domain}/admin/api/{self.api_version}/shop.json"
+            headers = {"X-Shopify-Access-Token": self.access_token}
+            async with httpx.AsyncClient(verify=verify_ssl, timeout=15.0) as client:
+                response = await client.get(url, headers=headers)
                 if response.status_code == 200:
-                    data = response.json()
-                    self.access_token = data.get("access_token")
-                    print("   OK: System authenticated with Shopify")
+                    shop_name = response.json().get("shop", {}).get("name", "Unknown")
+                    print(f"   OK: Connected to Shopify store '{shop_name}'")
                     return True
                 else:
-                    print(f"   FAILED: {response.text}")
+                    print(f"   ERROR: Token rejected by Shopify — Status {response.status_code}")
+                    print(f"   Check that SHOPIFY_ACCESS_TOKEN in Railway is still valid.")
+                    return False
         except Exception as e:
-            print(f"   ERROR: {e}")
-            
-        return False
+            print(f"   ERROR: Could not reach Shopify — {e}")
+            return False
+
 
     
     async def _show_oauth_instructions(self):
