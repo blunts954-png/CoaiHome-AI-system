@@ -881,25 +881,12 @@ header, .site-header, .header-wrapper {
                 except Exception as e:
                     print(f"   ⚠️  Menu error for '{menu['title']}': {e}")
 
-    def _strip_html(self, text: Any) -> Any:
-        """
-        Helper to strip UNSUPPORTED HTML tags while preserving basic rich-text tags
-        required by Shopify for rich_text settings (p, ul, li, etc).
-        """
-        if isinstance(text, str):
-            import re
-            # Only strip tags that aren't in the "safe" list for Shopify rich_text
-            # Allowed: p, ul, ol, li, h1-h6, b, i, strong, em, a, br
-            safe_tags = r'p|ul|ol|li|h[1-6]|b|i|strong|em|a|br'
-            # This regex matches tags that are NOT in the safe list
-            pattern = rf'<(?!/?({safe_tags})\b)[^>]*>'
-            cleaned = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL).strip()
-            return cleaned
-        elif isinstance(text, dict):
-            return {k: self._strip_html(v) for k, v in text.items()}
-        elif isinstance(text, list):
-            return [self._strip_html(i) for i in text]
+    def _wrap_richtext(self, text: str) -> str:
+        """Helper to ensure text is wrapped in <p> tags for Shopify richtext settings."""
+        if not text.startswith("<p>"):
+            return f"<p>{text}</p>"
         return text
+
 
     async def _configure_homepage_template(self) -> bool:
         """
@@ -1002,9 +989,7 @@ header, .site-header, .header-wrapper {
                             if btype in ("heading", "title"):
                                 bv["settings"]["heading"] = "Organize Every Corner of Your Home"
                             elif btype in ("text", "caption"):
-                                # Shopify JSON templates often reject HTML tags in plain text fields, 
-                                # BUT rich_text sections REQUIRE top-level <p> tags.
-                                bv["settings"]["text"] = "<p>Premium home organization products — kitchen, bathroom, closet & office</p>"
+                                bv["settings"]["text"] = "Premium home organization products — kitchen, bathroom, closet & office"
                             elif btype == "buttons":
                                 bv["settings"]["button_label_1"] = "Shop All"
                                 bv["settings"]["button_link_1"] = "/collections/all-products"
@@ -1093,16 +1078,13 @@ header, .site-header, .header-wrapper {
 
                     sec["settings"] = sett
 
-                # 5. Aggressively strip ALL HTML from the entire template to avoid 422 errors
-                clean_tmpl = self._strip_html(tmpl)
-
-                # 6. Write the modified template back
+                # 5. Write the modified template back
                 write_resp = await client.put(
                     f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
                     headers=headers,
                     json={"asset": {
                         "key": "templates/index.json",
-                        "value": json.dumps(clean_tmpl, indent=2)
+                        "value": json.dumps(tmpl, indent=2)
                     }}
                 )
 
