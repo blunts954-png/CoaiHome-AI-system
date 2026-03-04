@@ -564,63 +564,275 @@ A: Yes! We carefully select premium materials that last.</p>"""
 <p>We strive to display accurate product information and images.</p>"""
     
     async def _configure_theme(self) -> bool:
-        """Configure theme settings with branding (New in 2026)"""
+        """
+        Configure the active Shopify theme:
+        1. Write branding CSS asset
+        2. Update settings_data.json with CoaiHome hero, colors, announcement bar
+        """
         if not self.access_token:
             return False
-            
-        print("   Configuring theme branding...")
-        import httpx
-        headers = {"X-Shopify-Access-Token": self.access_token}
-        
+
+        import httpx, json
+        verify_ssl = os.getenv("SHOPIFY_SSL_VERIFY", "true").lower() == "true"
+        headers = {
+            "X-Shopify-Access-Token": self.access_token,
+            "Content-Type": "application/json"
+        }
+
         try:
-            async with httpx.AsyncClient() as client:
-                # 1. Get themes
-                resp = await client.get(f"https://{self.shop_domain}/admin/api/{self.api_version}/themes.json", headers=headers)
+            async with httpx.AsyncClient(verify=verify_ssl, timeout=30.0) as client:
+                # Get all themes, find the active one
+                resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes.json",
+                    headers=headers
+                )
                 themes = resp.json().get("themes", [])
-                
-                if not themes:
-                    print("   [!] No themes found in store.")
+                active = next((t for t in themes if t.get("role") == "main"), None)
+                if not active:
+                    active = themes[0] if themes else None
+                if not active:
+                    print("   [!] No theme found.")
                     return False
-                
-                # Try to brand all themes to be safe
-                branded_count = 0
-                for theme in themes:
-                    theme_id = theme["id"]
-                    
-                    brand_css = f"""
-                    :root {{
-                        --color-base-text: #2d2d2d;
-                        --color-base-background-1: #ffffff;
-                        --color-base-accent-1: #000000;
+
+                theme_id = active["id"]
+                theme_name = active.get("name", "Unknown")
+                print(f"   Configuring theme: {theme_name} (ID: {theme_id})")
+
+                # ── Step 1: Branding CSS ──────────────────────────────────────
+                brand_css = """
+/* CoaiHome Brand Styles */
+:root {
+  --color-base-text: #1a1a1a;
+  --color-base-background-1: #ffffff;
+  --color-base-background-2: #f8f7f4;
+  --color-base-accent-1: #2c5f2e;
+  --color-base-accent-2: #4a9e4e;
+  --color-base-solid-button-labels: #ffffff;
+  --color-base-outline-button-labels: #2c5f2e;
+  --font-heading-family: 'Georgia', serif;
+}
+.button, .btn, [class*="button--primary"] {
+  background-color: #2c5f2e !important;
+  border-color: #2c5f2e !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+}
+.button:hover, .btn:hover {
+  background-color: #1e4220 !important;
+}
+header, .site-header, .header-wrapper {
+  background-color: #1a1a1a !important;
+}
+.announcement-bar {
+  background-color: #2c5f2e !important;
+  color: #ffffff !important;
+}
+"""
+                await client.put(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
+                    headers=headers,
+                    json={"asset": {"key": "assets/coaihome-brand.css", "value": brand_css}}
+                )
+                print("   ✅ Brand CSS uploaded")
+
+                # ── Step 2: Read existing settings_data.json ─────────────────
+                asset_resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json"
+                    "?asset[key]=config/settings_data.json",
+                    headers=headers
+                )
+                existing_settings = {}
+                if asset_resp.status_code == 200:
+                    try:
+                        raw = asset_resp.json().get("asset", {}).get("value", "{}")
+                        existing_settings = json.loads(raw)
+                    except Exception:
+                        existing_settings = {}
+
+                # ── Step 3: Merge CoaiHome settings ──────────────────────────
+                current = existing_settings.get("current", {})
+                if isinstance(current, str):
+                    current = {}
+
+                # Colors & fonts
+                current.setdefault("colors_body_bg", "#ffffff")
+                current["colors_solid_button_background"] = "#2c5f2e"
+                current["colors_button_label"] = "#ffffff"
+                current["colors_accent_1"] = "#2c5f2e"
+                current["colors_accent_2"] = "#4a9e4e"
+                current["colors_text"] = "#1a1a1a"
+                current["colors_header_bg"] = "#1a1a1a"
+                current["colors_header_text"] = "#ffffff"
+                current["type_header_font"] = "playfair_display_n4"
+                current["type_base_font"] = "lato_n4"
+
+                # Announcement bar
+                current["announcement_bar_enable"] = True
+                current["announcement_bar_home_page_only"] = False
+                current["announcement_bar_message"] = "🚚 FREE SHIPPING on orders over $50 | Shop CoaiHome — Organize Your World"
+                current["announcement_bar_link"] = "/collections/all-products"
+
+                # Header / logo
+                current["header_logo_position"] = "middle-left"
+                current["header_sticky_type"] = "on-scroll-up"
+
+                # Cart
+                current["cart_type"] = "drawer"
+
+                # Social
+                current["social_twitter_link"] = ""
+                current["social_instagram_link"] = "https://www.instagram.com/coaihome"
+                current["social_tiktok_link"] = "https://www.tiktok.com/@coaihome"
+
+                existing_settings["current"] = current
+
+                # Write settings_data.json back
+                settings_resp = await client.put(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
+                    headers=headers,
+                    json={"asset": {
+                        "key": "config/settings_data.json",
+                        "value": json.dumps(existing_settings, indent=2)
                     }}
-                    .button, .button--primary {{
-                        background-color: #000000 !important;
-                        color: #ffffff !important;
-                    }}
-                    """
-                    
-                    asset_payload = {
-                        "asset": {
-                            "key": "assets/brand-styles.css",
-                            "value": brand_css
-                        }
-                    }
-                    
-                    asset_resp = await client.put(
-                        f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
-                        headers=headers,
-                        json=asset_payload
-                    )
-                    
-                    if asset_resp.status_code == 200:
-                        branded_count += 1
-                
-                print(f"   OK: Applied CoaiHome branding to {branded_count} themes.")
+                )
+                if settings_resp.status_code == 200:
+                    print("   ✅ Theme settings updated (colors, fonts, announcement bar)")
+                else:
+                    print(f"   ⚠️  settings_data.json update returned {settings_resp.status_code} — "
+                          "theme visual settings may need manual adjustment")
+
+                # ── Step 4: Inject CSS link into theme.liquid ─────────────────
+                liquid_resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json"
+                    "?asset[key]=layout/theme.liquid",
+                    headers=headers
+                )
+                if liquid_resp.status_code == 200:
+                    liquid = liquid_resp.json().get("asset", {}).get("value", "")
+                    css_link = "{{ 'coaihome-brand.css' | asset_url | stylesheet_tag }}"
+                    if "coaihome-brand.css" not in liquid:
+                        # Inject before </head>
+                        liquid = liquid.replace("</head>", f"  {css_link}\n</head>", 1)
+                        inj_resp = await client.put(
+                            f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
+                            headers=headers,
+                            json={"asset": {"key": "layout/theme.liquid", "value": liquid}}
+                        )
+                        if inj_resp.status_code == 200:
+                            print("   ✅ CSS injected into theme.liquid")
+                        else:
+                            print(f"   ⚠️  CSS injection returned {inj_resp.status_code}")
+                    else:
+                        print("   ✅ CSS already in theme.liquid")
+
                 return True
+
         except Exception as e:
-            print(f"   [!] Theme Branding Error: {e}")
+            print(f"   [!] Theme configuration error: {e}")
             return False
-    
+
+    async def _configure_navigation(self) -> bool:
+        """
+        Build real navigation menus via Shopify Storefront API menus
+        using the admin REST menus endpoint.
+        Creates:
+          - Main menu: Home / Shop All / Kitchen / Bathroom / Closet / Office
+          - Footer menu: About / FAQ / Shipping & Returns / Contact / Privacy / Terms
+        """
+        if not self.access_token:
+            return False
+
+        import httpx
+        verify_ssl = os.getenv("SHOPIFY_SSL_VERIFY", "true").lower() == "true"
+        headers = {
+            "X-Shopify-Access-Token": self.access_token,
+            "Content-Type": "application/json"
+        }
+
+        menus_to_create = [
+            {
+                "handle": "main-menu",
+                "title": "Main Menu",
+                "links": [
+                    {"title": "Home",              "url": "/",                              "type": "http"},
+                    {"title": "Shop All",          "url": "/collections/all-products",      "type": "http"},
+                    {"title": "Kitchen",           "url": "/collections/kitchen",           "type": "http"},
+                    {"title": "Bathroom",          "url": "/collections/bathroom",          "type": "http"},
+                    {"title": "Closet",            "url": "/collections/closet",            "type": "http"},
+                    {"title": "Office",            "url": "/collections/office",            "type": "http"},
+                ]
+            },
+            {
+                "handle": "footer",
+                "title": "Footer Menu",
+                "links": [
+                    {"title": "About Us",          "url": "/pages/about-us",               "type": "http"},
+                    {"title": "FAQ",               "url": "/pages/faq",                    "type": "http"},
+                    {"title": "Shipping & Returns","url": "/pages/shipping-returns",        "type": "http"},
+                    {"title": "Contact Us",        "url": "/pages/contact",                "type": "http"},
+                    {"title": "Privacy Policy",   "url": "/pages/privacy-policy",          "type": "http"},
+                    {"title": "Terms of Service", "url": "/pages/terms-of-service",        "type": "http"},
+                ]
+            }
+        ]
+
+        success = 0
+        async with httpx.AsyncClient(verify=verify_ssl, timeout=30.0) as client:
+            # Get existing menus
+            existing = {}
+            try:
+                r = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/menus.json",
+                    headers=headers
+                )
+                if r.status_code == 200:
+                    for m in r.json().get("menus", []):
+                        existing[m["handle"]] = m["id"]
+            except Exception:
+                pass
+
+            for menu in menus_to_create:
+                payload = {
+                    "menu": {
+                        "title": menu["title"],
+                        "handle": menu["handle"],
+                        "items": [
+                            {
+                                "title": lnk["title"],
+                                "url": lnk["url"],
+                                "type": "http",
+                                "items": []
+                            }
+                            for lnk in menu["links"]
+                        ]
+                    }
+                }
+                try:
+                    if menu["handle"] in existing:
+                        menu_id = existing[menu["handle"]]
+                        r = await client.put(
+                            f"https://{self.shop_domain}/admin/api/{self.api_version}/menus/{menu_id}.json",
+                            headers=headers, json=payload
+                        )
+                    else:
+                        r = await client.post(
+                            f"https://{self.shop_domain}/admin/api/{self.api_version}/menus.json",
+                            headers=headers, json=payload
+                        )
+
+                    if r.status_code in (200, 201):
+                        print(f"   ✅ Menu: {menu['title']}")
+                        success += 1
+                    else:
+                        # Menus API may not be available on all Shopify plans — that's OK
+                        print(f"   ⚠️  Menu API returned {r.status_code} for '{menu['title']}' "
+                              "(manual nav setup may be needed in Shopify admin)")
+                except Exception as e:
+                    print(f"   ⚠️  Menu error for '{menu['title']}': {e}")
+
+        return success > 0
+
+
     async def _create_collections(self) -> List[Dict]:
         """Create product collections - updates existing if they exist"""
         if not self.access_token:
