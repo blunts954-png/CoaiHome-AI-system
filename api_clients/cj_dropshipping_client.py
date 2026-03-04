@@ -328,9 +328,17 @@ class CJDropshippingClient:
     async def create_order(self, order_data: Dict) -> Dict:
         """Create a new order"""
         return await self._make_request("POST", "/order/create", json=order_data)
+
+    async def batch_create_order(self, order_payload: Dict) -> Dict:
+        """Create a batch order (recommended for dropshipping)"""
+        return await self._make_request("POST", "/shopping/order/batchCreateOrder", json=order_payload)
+
+    async def get_order_details(self, cj_order_id: str) -> Dict:
+        """Get detailed order information by CJ order ID (queryById)"""
+        return await self._make_request("POST", "/shopping/order/queryById", json={"id": cj_order_id})
     
-    async def get_order_details(self, order_id: str) -> Dict:
-        """Get detailed order information"""
+    async def get_order_details_legacy(self, order_id: str) -> Dict:
+        """Get detailed order information (legacy endpoint)"""
         return await self._make_request("GET", "/order/getOrderDetails", params={"orderId": order_id})
     
     async def cancel_order(self, order_id: str, reason: str = "") -> Dict:

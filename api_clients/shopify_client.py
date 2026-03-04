@@ -46,6 +46,33 @@ class ShopifyClient:
             "Missing Shopify access token. Set SHOPIFY_ACCESS_TOKEN or install app via /auth/shopify/install."
         )
 
+    async def gql(self, query: str, variables: Optional[Dict] = None) -> Dict:
+        """Make an authenticated GraphQL request to Shopify"""
+        if not self.shop_url:
+            raise ValueError("Shopify client is not configured with a valid shop URL.")
+
+        token = await self._get_access_token()
+        headers = {
+            "X-Shopify-Access-Token": token,
+            "Content-Type": "application/json"
+        }
+        
+        url = f"https://{self.shop_url}/admin/api/{self.api_version}/graphql.json"
+        
+        verify = self.ca_bundle if self.ca_bundle else self.ssl_verify
+        async with httpx.AsyncClient(verify=verify) as client:
+            response = await client.post(
+                url,
+                headers=headers,
+                json={"query": query, "variables": variables or {}},
+                timeout=30.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            if "errors" in data:
+                raise RuntimeError(f"Shopify GraphQL Error: {data['errors']}")
+            return data.get("data", {})
+
     async def _request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
         """Make an authenticated request to Shopify API"""
         if not self.base_url:

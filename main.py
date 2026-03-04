@@ -71,7 +71,7 @@ class ContentRequest(BaseModel):
 
 SHOPIFY_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$")
 # NOTE: No in-memory token dicts — OAuth state and tokens are persisted in the DB.
-# See models.database.ShopInstall and models.database.OAuthState.
+# See models.database.ShopifyInstallation and models.database.ShopifyOAuthState.
 
 
 def _safe_log(message: str):
@@ -932,9 +932,9 @@ async def health_check():
 
     # 6. OAuth persistence
     try:
-        from models.database import SessionLocal, ShopInstall
+        from models.database import SessionLocal, ShopifyInstallation
         db = SessionLocal()
-        db.query(ShopInstall).limit(1).all()
+        db.query(ShopifyInstallation).limit(1).all()
         db.close()
         checks["oauth_persistence"] = {"status": "pass", "detail": "shop_installs table accessible"}
     except Exception as e:
@@ -1661,6 +1661,85 @@ async def import_product_browser(supplier_url: str, title: str, price: float):
     )
     
     return result
+
+
+# ============ Fulfillment Webhooks & API ============
+
+def _verify_shopify_hmac_header(body: bytes, hmac_header: str, secret: str) -> bool:
+    """Verify that a webhook request actually came from Shopify."""
+    import hmac
+    import hashlib
+    import base64
+    if not secret:
+        return False
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
+    computed_hmac = base64.b64encode(digest).decode("utf-8")
+    return hmac.compare_digest(computed_hmac, hmac_header)
+
+
+@app.post("/webhooks/shopify/orders-paid")
+async def webhook_shopify_orders_paid(request: Request, background_tasks: BackgroundTasks):
+    """
+    Webhook triggered when a Shopify order is paid.
+    Fulfills the order via CJ Dropshipping in the background.
+    """
+    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256")
+    if not hmac_header:
+        raise HTTPException(status_code=401, detail="Missing HMAC")
+
+    body = await request.body()
+    secret = settings.shopify.api_secret
+    if not _verify_shopify_hmac_header(body, hmac_header, secret):
+        logger.warning(f"Invalid Webhook HMAC detected")
+        raise HTTPException(status_code=401, detail="Invalid HMAC")
+
+    try:
+        payload = json.loads(body)
+        from services.fulfillment_service import FulfillmentService
+        svc = FulfillmentService()
+        background_tasks.add_task(svc.process_new_order, payload)
+        return {"status": "queued"}
+    except Exception as e:
+        logger.error(f"Error parsing Shopify webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/fulfillment/sync-order/{shopify_order_id}")
+async def manual_sync_order(shopify_order_id: str, background_tasks: BackgroundTasks):
+    """Manually trigger the fulfillment pipeline for a specific order."""
+    from api_clients.shopify_client import ShopifyClient
+    from services.fulfillment_service import FulfillmentService
+    
+    client = ShopifyClient()
+    try:
+        order_resp = await client.get_order(shopify_order_id)
+        if "order" not in order_resp:
+             raise HTTPException(status_code=404, detail="Order not found")
+        
+        svc = FulfillmentService()
+        background_tasks.add_task(svc.process_new_order, order_resp["order"])
+        return {"status": "success", "message": f"Fulfillment triggered for order {shopify_order_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/fulfillment/status/{shopify_order_id}")
+async def get_fulfillment_status_api(shopify_order_id: str):
+    """Check the internal status of an order fulfillment."""
+    from models.database import SessionLocal, ShopifyOrder
+    db = SessionLocal()
+    order = db.query(ShopifyOrder).filter(ShopifyOrder.shopify_order_id == shopify_order_id).first()
+    db.close()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found in records")
+    
+    return {
+        "shopify_order_id": order.shopify_order_id,
+        "status": order.status,
+        "cj_order_id": order.cj_order_id,
+        "tracking_number": order.tracking_number,
+        "error": order.last_error
+    }
 
 
 if __name__ == "__main__":

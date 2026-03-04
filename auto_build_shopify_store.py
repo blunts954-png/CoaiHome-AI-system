@@ -351,10 +351,27 @@ class AutomaticShopifyBuilder:
                             selling_price=p.get("price", 29.99),
                             cost_price=p.get("cost", 0),
                             status=ProductStatus.ACTIVE,
-                            supplier_name="CJ Dropshipping" if p.get("sku", "").startswith("CJ-") else "CoaiHome"
+                            supplier_name="CJ Dropshipping" if p.get("sku", "").startswith("CJ-") else "CoaiHome",
+                            sku=p.get("sku")
                         )
                         db.add(db_p)
                         db.commit()
+
+                        # If this is a CJ product, record the mapping for fulfillment
+                        if p.get("sku", "").startswith("CJ-"):
+                            from models.database import VariantMap
+                            cj_vid = p.get("sku", "").replace("CJ-", "")
+                            # Check if mapping already exists
+                            vm = db.query(VariantMap).filter(VariantMap.shopify_variant_id == str(v_id)).first()
+                            if not vm:
+                                vm = VariantMap(
+                                    shopify_variant_id=str(v_id),
+                                    cj_variant_id=cj_vid,
+                                    sku=p.get("sku"),
+                                    store_id=1
+                                )
+                                db.add(vm)
+                                db.commit()
                         
                         created.append(data["product"])
                         print(f"   ✅ Published: {p['title'][:50]}")
@@ -877,12 +894,12 @@ header, .site-header, .header-wrapper {
 
                 theme_id = active["id"]
 
-                # 2. Get collection IDs for our collections
+                # 2. Get collection ID/handles for our collections
                 coll_resp = await client.get(
                     f"https://{self.shop_domain}/admin/api/{self.api_version}/custom_collections.json?limit=50",
                     headers=headers
                 )
-                coll_map = {}
+                coll_map = {} # handle -> id
                 for c in coll_resp.json().get("custom_collections", []):
                     coll_map[c["handle"]] = c["id"]
                 
@@ -894,20 +911,15 @@ header, .site-header, .header-wrapper {
                 for c in sc_resp.json().get("smart_collections", []):
                     coll_map[c["handle"]] = c["id"]
 
-                kitchen_id   = coll_map.get("kitchen")
-                bathroom_id  = coll_map.get("bathroom")
-                closet_id    = coll_map.get("closet")
-                office_id    = coll_map.get("office")
-                all_id       = coll_map.get("all-products") or coll_map.get("all")
+                # Modern Dawn/Trade themes usually prefer handles for collection settings
+                kitchen_h   = "kitchen" if "kitchen" in coll_map else "all-products"
+                bathroom_h  = "bathroom" if "bathroom" in coll_map else "all-products"
+                closet_h    = "closet" if "closet" in coll_map else "all-products"
+                office_h    = "office" if "office" in coll_map else "all-products"
+                all_products_h = "all-products" if "all-products" in coll_map else "all"
 
-                coll_id_1 = kitchen_id or all_id or ""
-                coll_id_2 = bathroom_id or all_id or ""
-                coll_id_3 = closet_id or all_id or ""
-                coll_id_4 = office_id or all_id or ""
-                coll_id_5 = all_id or coll_id_1 or ""
-
-                def coll_gid(cid):
-                    return f"gid://shopify/Collection/{cid}" if cid else ""
+                def coll_val(handle):
+                    return handle if handle in coll_map else all_products_h
 
                 # 3. Read current templates/index.json
                 idx_resp = await client.get(
@@ -931,33 +943,44 @@ header, .site-header, .header-wrapper {
                     sett = sec.get("settings", {})
 
                     # ─── Hero / image-banner / slideshow ───────────────────────
-                    if sec_type in ("image-banner", "slideshow", "banner", "hero"):
-                        sett["heading"]    = "Organize Every Corner of Your Home"
-                        sett["heading_size"] = "h1"
-                        sett["subheading"] = "Premium home organization products — kitchen, bathroom, closet & office"
-                        sett["button_label_1"]  = "Shop All Products"
-                        sett["button_link_1"]   = f"/collections/all-products"
-                        sett["button_label_2"]  = "Shop Kitchen"
-                        sett["button_link_2"]   = "/collections/kitchen"
-                        sett["image_overlay_opacity"] = 30
-                        # For slideshow blocks update first slide text
+                    if sec_type in ("image-banner", "slideshow", "banner", "hero", "image-with-text"):
+                        if sec_type == "image-with-text":
+                             sett["heading"] = "Quality Home Essentials"
+                             sett["text"] = "<p>Discover premium home organization solutions for every room in your home.</p>"
+                        else:
+                            sett["heading"]    = "Organize Every Corner of Your Home"
+                            sett["heading_size"] = "h1"
+                            # Dawn/Trade 'image-banner' doesn't usually have a 'subheading' setting on top, 
+                            # it has BLOCKS of type 'text'
+                        
+                        # Update all blocks for text/subheading
                         for bk, bv in sec.get("blocks", {}).items():
-                            if bv.get("type") in ("slide", "image"):
-                                bv.setdefault("settings", {})
-                                bv["settings"]["heading"]    = "Organize Every Corner of Your Home"
-                                bv["settings"]["subheading"] = "Premium home organizers — kitchen, bath, closet & office"
+                            bv.setdefault("settings", {})
+                            btype = bv.get("type", "")
+                            if btype in ("heading", "title"):
+                                bv["settings"]["heading"] = "Organize Every Corner of Your Home"
+                            elif btype in ("text", "caption"):
+                                bv["settings"]["text"] = "<p>Premium home organization products — kitchen, bathroom, closet & office</p>"
+                            elif btype == "buttons":
+                                bv["settings"]["button_label_1"] = "Shop All"
+                                bv["settings"]["button_link_1"] = "/collections/all-products"
+                            elif btype in ("slide", "image"):
+                                bv["settings"]["heading"] = "Organize Every Corner of Your Home"
+                                bv["settings"]["subheading"] = "<p>Premium home organizers — kitchen, bath, closet & office</p>"
                                 bv["settings"]["button_label"] = "Shop Now"
-                                bv["settings"]["button_link"]  = "/collections/all-products"
-                                break  # only first slide
+                                bv["settings"]["button_link"] = "/collections/all-products"
 
                     # ─── Rich text / announcement / intro ──────────────────────
                     elif sec_type in ("rich-text", "announcement-bar"):
                         sett["heading"] = "Welcome to CoaiHome"
-                        sett["content"] = "<p>Discover premium home organization solutions for every room in your home. Free shipping on orders over $50.</p>"
-
-                    # ─── Brand logos / partner logos ───────────────────────────
-                    elif sec_type in ("brand-logos", "logos", "featured-row"):
-                        sett["heading"] = "As Seen In"
+                        # Rich text sections usually have BLOCKS for the actual text
+                        for bk, bv in sec.get("blocks", {}).items():
+                            bv.setdefault("settings", {})
+                            if bv.get("type") == "text":
+                                bv["settings"]["text"] = "<p>Discover premium home organization solutions for every room in your home. Free shipping on orders over $50.</p>"
+                        # Fallback if theme uses section-level setting
+                        if "text" in sett: sett["text"] = "<p>Welcome to CoaiHome</p>"
+                        if "content" in sett: sett["content"] = "<p>Welcome to CoaiHome</p>"
 
                     # ─── Collection list / featured categories ─────────────────
                     elif sec_type in (
@@ -968,27 +991,24 @@ header, .site-header, .header-wrapper {
                         sett["heading"] = "Shop by Category"
                         # Update each collection block
                         block_keys = list(sec.get("blocks", {}).keys())
-                        coll_ids = [coll_id_1, coll_id_2, coll_id_3, coll_id_4, coll_id_5]
-                        coll_handles = ["kitchen", "bathroom", "closet", "office", "all-products"]
-                        coll_labels  = ["Kitchen", "Bathroom", "Closet", "Office", "All Products"]
+                        cat_handles = [kitchen_h, bathroom_h, closet_h, office_h, all_products_h]
+                        cat_labels  = ["Kitchen", "Bathroom", "Closet", "Office", "All Products"]
                         for i, bk in enumerate(block_keys[:5]):
                             bv = sec["blocks"][bk]
                             bv.setdefault("settings", {})
-                            if coll_ids[i]:
-                                bv["settings"]["collection"] = coll_ids[i]
-                            bv["settings"]["heading"] = coll_labels[i]
+                            bv["settings"]["collection"] = coll_val(cat_handles[i])
+                            if "heading" in bv["settings"]:
+                                bv["settings"]["heading"] = cat_labels[i]
 
                     # ─── Featured collection (product grid) ────────────────────
                     elif sec_type in ("featured-collection", "product-grid", "new-arrivals"):
-                        title = sett.get("title", sett.get("heading", ""))
-                        if "new" in title.lower() or "arrive" in title.lower():
-                            sett["title"]      = "New Arrivals"
+                        title = str(sett.get("title", sett.get("heading", ""))).lower()
+                        if "new" in title or "arrive" in title:
                             sett["heading"]    = "New Arrivals"
-                            sett["collection"] = coll_id_1 or ""
+                            sett["collection"] = coll_val(kitchen_h)
                         else:
-                            sett["title"]      = "Bestsellers"
                             sett["heading"]    = "Bestsellers"
-                            sett["collection"] = all_id or coll_id_1 or ""
+                            sett["collection"] = coll_val(all_products_h)
                         sett["products_to_show"] = 8
                         sett["show_view_all"] = True
 
@@ -1006,27 +1026,26 @@ header, .site-header, .header-wrapper {
                             if i < len(testimonials):
                                 t = testimonials[i]
                                 bv["settings"]["heading"]  = t[0]
-                                bv["settings"]["text"]     = t[1]
+                                bv["settings"]["text"]     = f"<p>{t[1]}</p>"
                                 bv["settings"]["author"]   = t[2]
-                                bv["settings"]["rating"]   = 5
 
                     # ─── Multicolumn / features / "You're set up for success" ──
                     elif sec_type in ("multicolumn", "columns-with-image", "feature-row"):
                         sett["title"]   = "Why Choose CoaiHome?"
                         sett["heading"] = "Why Choose CoaiHome?"
                         features = [
-                            ("🌿 Eco-Friendly Materials", "Our organizers are crafted from sustainable bamboo and BPA-free materials that are good for your home and the planet."),
-                            ("🚚 Free Shipping $50+",     "Free standard shipping on all orders over $50. Express options available at checkout."),
-                            ("↩️ 30-Day Returns",          "Not satisfied? Return any item within 30 days for a full refund — no questions asked."),
-                            ("⭐ Premium Quality",         "Every product is hand-selected for durability, functionality, and beautiful design."),
+                            ("🌿 Eco-Friendly Materials", "Our organizers are crafted from sustainable bamboo and BPA-free materials."),
+                            ("🚚 Free Shipping $50+",     "Free standard shipping on all orders over $50."),
+                            ("↩️ 30-Day Returns",          "Not satisfied? Return any item within 30 days."),
+                            ("⭐ Premium Quality",         "Every product is hand-selected for durability."),
                         ]
                         for i, (bk, bv) in enumerate(sec.get("blocks", {}).items()):
                             bv.setdefault("settings", {})
                             if i < len(features):
-                                bv["settings"]["title"]       = features[i][0]
-                                bv["settings"]["text"]        = features[i][1]
                                 bv["settings"]["heading"]     = features[i][0]
-                                bv["settings"]["description"] = features[i][1]
+                                bv["settings"]["text"]        = f"<p>{features[i][1]}</p>"
+                                if "description" in bv["settings"]:
+                                    bv["settings"]["description"] = f"<p>{features[i][1]}</p>"
 
                     sec["settings"] = sett
 
@@ -1057,7 +1076,7 @@ header, .site-header, .header-wrapper {
                             for sk, sv in ann_data.get("sections", {}).items():
                                 for bk, bv in sv.get("blocks", {}).items():
                                     bv.setdefault("settings", {})
-                                    bv["settings"]["text"] = "🚚 FREE SHIPPING on orders over $50 | Use code ORGANIZE10 for 10% off your first order!"
+                                    bv["settings"]["text"] = "<p>🚚 FREE SHIPPING on orders over $50 | Use code ORGANIZE10 for 10% off your first order!</p>"
                             await client.put(
                                 f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
                                 headers=headers,

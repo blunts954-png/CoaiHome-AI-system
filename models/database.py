@@ -312,6 +312,53 @@ class CustomerSupportTicket(Base):
     resolved_at = Column(DateTime)
 
 
+class OrderStatus(str, enum.Enum):
+    RECEIVED = "received"
+    PAID = "paid"
+    ON_HOLD = "on_hold"
+    SENT_TO_CJ = "sent_to_cj"
+    TRACKING_UPDATED = "tracking_updated"
+    FAILED = "failed"
+
+
+class ShopifyOrder(Base):
+    """Tracks the end-to-end fulfillment of a Shopify order via CJ."""
+    __tablename__ = "shopify_orders"
+    
+    id = Column(Integer, primary_key=True)
+    shopify_order_id = Column(String(255), unique=True, index=True, nullable=False)
+    order_name = Column(String(100), nullable=True)  # e.g. "#1001"
+    customer_email = Column(String(255), nullable=True)
+    total_price = Column(Float, nullable=True)
+    currency = Column(String(10), nullable=True)
+
+    status = Column(Enum(OrderStatus), default=OrderStatus.RECEIVED, nullable=False)
+    cj_order_id = Column(String(255), nullable=True)
+    tracking_number = Column(String(255), nullable=True)
+    logistics_company = Column(String(255), nullable=True)
+    last_error = Column(Text, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VariantMap(Base):
+    """
+    The critical mapping between Shopify variants and CJ supplier variants.
+    """
+    __tablename__ = "variant_map"
+    
+    id = Column(Integer, primary_key=True)
+    store_id = Column(Integer, ForeignKey("stores.id"), index=True)
+    shopify_variant_id = Column(String(255), unique=True, index=True, nullable=False)
+    cj_variant_id = Column(String(255), index=True, nullable=False)
+    sku = Column(String(255))
+    active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class ShopifyOAuthState(Base):
     """Persist OAuth state values to survive process restarts."""
     __tablename__ = "shopify_oauth_states"
