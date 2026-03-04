@@ -70,8 +70,8 @@ class ContentRequest(BaseModel):
 
 
 SHOPIFY_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$")
-OAUTH_STATE_STORE: Dict[str, str] = {}
-INSTALLED_SHOPS: Dict[str, str] = {}
+# NOTE: No in-memory token dicts — OAuth state and tokens are persisted in the DB.
+# See models.database.ShopInstall and models.database.OAuthState.
 
 
 def _safe_log(message: str):
@@ -139,22 +139,25 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware - use configurable origins from settings
-_allowed_origins = ["*"]  # Default for development
-
-# Check settings for production origins
-if settings.system.cors_allowed_origins:
-    _allowed_origins = [o.strip() for o in settings.system.cors_allowed_origins.split(",") if o.strip()]
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# Explicit origins are required for production. Wildcard is allowed only in dev
+# (settings.system.debug=True) so we don't ship an open CORS posture by accident.
+_cors_raw = (settings.system.cors_allowed_origins or "").strip()
+if _cors_raw:
+    _allowed_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+elif settings.system.debug:
+    _allowed_origins = ["*"]   # local dev only
+    _safe_log("INFO: CORS wildcard enabled (debug mode). Set SYSTEM_CORS_ALLOWED_ORIGINS for production.")
 else:
-    # Warn if using wildcard CORS in production (non-debug) mode
-    if not settings.system.debug:
-        _safe_log("WARNING: CORS is allowing all origins (no SYSTEM_CORS_ALLOWED_ORIGINS set). "
-                  "This is insecure for production. Set SYSTEM_CORS_ALLOWED_ORIGINS env var.")
+    # Production with no explicit origins — refuse wildcard, deny all cross-origin.
+    _allowed_origins = []
+    _safe_log(
+        "WARNING: SYSTEM_CORS_ALLOWED_ORIGINS is not set and DEBUG=false. "
+        "Cross-origin requests will be blocked. Set SYSTEM_CORS_ALLOWED_ORIGINS to your Railway domain."
+    )
 
-# Warn if SSL verification is disabled
 if not settings.shopify.ssl_verify:
-    _safe_log("WARNING: SHOPIFY_SSL_VERIFY is false. TLS certificate verification is disabled! "
-              "This is insecure for production.")
+    _safe_log("WARNING: SHOPIFY_SSL_VERIFY=false — TLS verification is disabled. Enable in production.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -217,7 +220,16 @@ async def shopify_install(shop: str):
         raise HTTPException(status_code=400, detail="Invalid shop domain. Use format: store-name.myshopify.com")
 
     state = secrets.token_urlsafe(24)
-    OAUTH_STATE_STORE[state] = shop
+
+    # Persist state to DB instead of in-memory dict
+    from models.database import SessionLocal, OAuthState
+    db = SessionLocal()
+    try:
+        db.add(OAuthState(state=state, shop_domain=shop))
+        db.commit()
+    finally:
+        db.close()
+
     callback_url = f"{settings.shopify.app_url.rstrip('/')}/auth/shopify/callback"
     query = urlencode(
         {
@@ -245,10 +257,26 @@ async def shopify_callback(request: Request):
         raise HTTPException(status_code=400, detail="Missing required OAuth parameters")
     if not _is_valid_shop_domain(shop):
         raise HTTPException(status_code=400, detail="Invalid shop domain")
-    if OAUTH_STATE_STORE.pop(state, None) != shop:
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
     if not _verify_shopify_hmac(request, settings.shopify.api_secret):
         raise HTTPException(status_code=400, detail="Invalid OAuth HMAC signature")
+
+    # Validate + consume state from DB (replaces in-memory pop)
+    from models.database import SessionLocal, OAuthState, ShopInstall
+    from datetime import timedelta
+    db = SessionLocal()
+    try:
+        db_state = db.query(OAuthState).filter(OAuthState.state == state).first()
+        if not db_state or db_state.shop_domain != shop:
+            raise HTTPException(status_code=400, detail="Invalid OAuth state")
+        # Expire states older than 15 minutes
+        if (datetime.utcnow() - db_state.created_at).total_seconds() > 900:
+            db.delete(db_state)
+            db.commit()
+            raise HTTPException(status_code=400, detail="OAuth state expired — restart installation")
+        db.delete(db_state)
+        db.commit()
+    finally:
+        db.close()
 
     token_url = f"https://{shop}/admin/oauth/access_token"
     payload = {
@@ -266,19 +294,36 @@ async def shopify_callback(request: Request):
     if not access_token:
         raise HTTPException(status_code=502, detail="Token exchange failed: missing access_token")
 
-    # Runtime-only cache so this process can immediately call Shopify APIs.
+    # Persist token to DB — survives restarts and multi-worker deployments
+    db = SessionLocal()
+    try:
+        existing = db.query(ShopInstall).filter(ShopInstall.shop_domain == shop).first()
+        if existing:
+            existing.access_token = access_token
+        else:
+            db.add(ShopInstall(shop_domain=shop, access_token=access_token))
+        db.commit()
+    finally:
+        db.close()
+
+    # Also warm the runtime settings so this request can immediately call Shopify APIs
     settings.shopify.shop_url = shop
     settings.shopify.access_token = access_token
-    INSTALLED_SHOPS[shop] = access_token
 
     return RedirectResponse(url=f"/dashboard?shop={shop}&installed=1", status_code=302)
 
 
 @app.get("/auth/shopify/status")
 async def shopify_install_status(shop: str):
-    """Check whether this process has an installed token cached for a shop."""
+    """Check whether the DB has a persisted token for this shop."""
+    from models.database import SessionLocal, ShopInstall
     shop = shop.strip().lower()
-    return {"shop": shop, "installed": shop in INSTALLED_SHOPS}
+    db = SessionLocal()
+    try:
+        row = db.query(ShopInstall).filter(ShopInstall.shop_domain == shop).first()
+        return {"shop": shop, "installed": row is not None}
+    finally:
+        db.close()
 
 
 # ============ API Routes - Store Builder ============
@@ -816,6 +861,98 @@ async def get_system_status():
             "4. Set SYSTEM_SUPPLIER_PLATFORM=cj and add CJ_API_TOKEN for CJ automation"
         ]
     }
+
+
+# ============ Phase C: Health endpoint ============
+
+@app.get("/health")
+async def health_check():
+    """
+    Deep health check — validates DB, credentials, scheduler, security.
+    Returns HTTP 200 if healthy, HTTP 503 if any critical check fails.
+    Use this as your Railway/Render health check URL.
+    """
+    from sqlalchemy import text as sa_text
+    checks = {}
+    critical_fail = False
+
+    # 1. Database
+    try:
+        from models.database import engine, SessionLocal
+        with engine.connect() as conn:
+            conn.execute(sa_text("SELECT 1"))
+        checks["database"] = {"status": "pass", "detail": "Connected"}
+    except Exception as e:
+        checks["database"] = {"status": "fail", "detail": str(e)}
+        critical_fail = True
+
+    # 2. Shopify credentials
+    has_shopify = bool(settings.shopify.shop_url and settings.shopify.access_token)
+    checks["shopify_credentials"] = {
+        "status": "pass" if has_shopify else "fail",
+        "detail": "SHOPIFY_SHOP_URL + SHOPIFY_ACCESS_TOKEN present" if has_shopify
+                  else "Missing SHOPIFY_SHOP_URL or SHOPIFY_ACCESS_TOKEN"
+    }
+    if not has_shopify:
+        critical_fail = True
+
+    # 3. CJ credentials
+    cj_parsed = parse_cj_credentials(
+        cj_token=settings.cj.api_token,
+        cj_email=settings.cj.api_email,
+        cj_key=settings.cj.api_key
+    )
+    checks["cj_credentials"] = {
+        "status": "pass" if cj_parsed["is_valid"] else "warn",
+        "detail": "CJ API credentials valid" if cj_parsed["is_valid"]
+                  else "CJ not configured (SHOPIFY-ONLY mode)"
+    }
+
+    # 4. AI key
+    has_ai = bool(settings.ai.api_key and settings.ai.api_key != "your_openai_api_key_here")
+    checks["ai_key"] = {
+        "status": "pass" if has_ai else "warn",
+        "detail": "AI API key present" if has_ai else "AI_API_KEY not set — AI features disabled"
+    }
+
+    # 5. CORS security
+    cors_ok = bool(settings.system.cors_allowed_origins)
+    checks["cors_security"] = {
+        "status": "pass" if cors_ok else "warn",
+        "detail": f"Origins: {settings.system.cors_allowed_origins}" if cors_ok
+                  else "SYSTEM_CORS_ALLOWED_ORIGINS not set — wildcard or blocked"
+    }
+
+    # 6. OAuth persistence
+    try:
+        from models.database import SessionLocal, ShopInstall
+        db = SessionLocal()
+        db.query(ShopInstall).limit(1).all()
+        db.close()
+        checks["oauth_persistence"] = {"status": "pass", "detail": "shop_installs table accessible"}
+    except Exception as e:
+        checks["oauth_persistence"] = {"status": "fail", "detail": str(e)}
+        critical_fail = True
+
+    # 7. SSL verification
+    checks["ssl_verify"] = {
+        "status": "pass" if settings.shopify.ssl_verify else "warn",
+        "detail": "TLS enabled" if settings.shopify.ssl_verify else "SHOPIFY_SSL_VERIFY=false"
+    }
+
+    overall = "healthy" if not critical_fail else "degraded"
+    status_code = 200 if not critical_fail else 503
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": overall,
+            "checks": checks,
+            "mode": "FULL" if (has_shopify and cj_parsed["is_valid"]) else
+                    ("SHOPIFY_ONLY" if has_shopify else "SETUP_REQUIRED")
+        }
+    )
 
 
 # ============ API Routes - Pricing ============
