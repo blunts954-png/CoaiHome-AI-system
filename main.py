@@ -369,100 +369,113 @@ async def export_products_csv():
     """
     import csv
     import io
+    import traceback
     from models.database import SessionLocal, Product, ProductStatus
 
-    db = SessionLocal()
-    products = db.query(Product).filter(
-        Product.status == ProductStatus.ACTIVE
-    ).limit(250).all()
-    db.close()
+    try:
+        db = SessionLocal()
+        products = db.query(Product).filter(
+            Product.status == ProductStatus.ACTIVE
+        ).limit(500).all()
+        db.close()
 
-    # Shopify CSV format
-    output = io.StringIO()
-    writer = csv.writer(output)
+        # Shopify CSV format
+        output = io.StringIO()
+        writer = csv.writer(output)
 
-    # Shopify required headers
-    writer.writerow([
-        "Handle", "Title", "Body (HTML)", "Vendor", "Product Category",
-        "Type", "Tags", "Published", "Option1 Name", "Option1 Value",
-        "Variant SKU", "Variant Grams", "Variant Inventory Tracker",
-        "Variant Inventory Qty", "Variant Inventory Policy",
-        "Variant Fulfillment Service", "Variant Price",
-        "Variant Compare At Price", "Variant Requires Shipping",
-        "Variant Taxable", "Image Src", "Image Position",
-        "Status"
-    ])
-
-    ai_catalog = [
-        {"title": "Bamboo Kitchen Drawer Organizer", "price": 34.99, "compare": 48.99, "desc": "Expandable bamboo drawer dividers. Keep your kitchen tools perfectly organized.", "type": "Kitchen Organization"},
-        {"title": "Stackable Fridge Storage Bins Set of 4", "price": 42.99, "compare": 59.99, "desc": "Crystal-clear stackable bins designed for refrigerators. Maximize fridge space instantly.", "type": "Kitchen Organization"},
-        {"title": "Rotating Makeup and Skincare Organizer", "price": 52.99, "compare": 74.99, "desc": "360 degree spinning tower with 20 storage sections. Keep beauty products accessible.", "type": "Bathroom Organization"},
-        {"title": "Magnetic Spice Rack 12 Jars Included", "price": 45.99, "compare": 64.99, "desc": "Wall-mounted magnetic spice storage system. Saves counter space and keeps spices visible.", "type": "Kitchen Organization"},
-        {"title": "Under-Sink Cabinet Organizer 2-Tier", "price": 38.99, "compare": 54.99, "desc": "Adjustable 2-tier shelf maximizes under-sink space. Perfect for cleaning supplies.", "type": "Bathroom Organization"},
-        {"title": "Floating Wall Shelf Set of 3", "price": 56.99, "compare": 79.99, "desc": "Minimalist floating shelves for any room. Display photos, plants, and decor with style.", "type": "Office Organization"},
-        {"title": "Closet Shelf Dividers 6 Pack", "price": 24.99, "compare": 34.99, "desc": "Sturdy closet dividers for sweaters, jeans, and handbags. Install without tools.", "type": "Closet Organization"},
-        {"title": "Desktop File and Document Organizer", "price": 32.99, "compare": 45.99, "desc": "5-tier mesh file organizer for offices and home desks. Keep paperwork sorted.", "type": "Office Organization"},
-        {"title": "Pantry Storage Container Set 10 Piece", "price": 48.99, "compare": 68.99, "desc": "Airtight BPA-free containers for grains, pasta, and snacks. Includes labels and scoops.", "type": "Kitchen Organization"},
-        {"title": "Over-The-Door Shoe Organizer 30 Pockets", "price": 29.99, "compare": 42.99, "desc": "Space-saving door organizer for shoes and accessories. Fits any door.", "type": "Closet Organization"},
-        {"title": "Cable Management Box and Cord Organizer", "price": 27.99, "compare": 38.99, "desc": "Hide power strips and tangled cables in this sleek organizer box. Clean modern look.", "type": "Office Organization"},
-        {"title": "Hanging Purse and Handbag Organizer", "price": 36.99, "compare": 51.99, "desc": "Transparent hanging organizer for 12 bags. Clear pockets keep purses visible.", "type": "Closet Organization"},
-        {"title": "Bathroom Counter Organizer 3-Tier", "price": 31.99, "compare": 44.99, "desc": "3-tier rotating bathroom caddy for toiletries. Chrome finish looks premium.", "type": "Bathroom Organization"},
-        {"title": "Stackable Storage Drawers 3-Drawer", "price": 54.99, "compare": 76.99, "desc": "Clear stackable drawers perfect for makeup, office, or craft supplies.", "type": "Office Organization"},
-        {"title": "Garage Wall Tool Organizer Panel", "price": 67.99, "compare": 94.99, "desc": "Pegboard panel system for garage tools. Includes 20 hooks and 5 baskets.", "type": "Kitchen Organization"},
-    ]
-
-    # Use DB products if we have real ones with prices, otherwise use AI catalog
-    rows_written = 0
-    if products and any(p.selling_price and p.selling_price > 0 for p in products[:20]):
-        seen_titles = set()
-        for p in products:
-            if not p.title or not p.selling_price:
-                continue
-            title_key = p.title.lower().strip()
-            if title_key in seen_titles:
-                continue
-            seen_titles.add(title_key)
-
-            handle = p.title.lower().replace(" ", "-").replace("&", "and")[:50]
-            compare = round(p.selling_price * 1.4, 2)
-            image_src = ""
-            if p.ai_research_data and isinstance(p.ai_research_data, dict):
-                image_src = p.ai_research_data.get("main_image", "")
-
-            writer.writerow([
-                handle, p.title, p.description or f"Premium {p.title}.",
-                "CoaiHome", "Home & Garden", p.category or "Home Goods",
-                "organizer, home, storage", "true",
-                "Title", "Default Title",
-                p.sku or f"COAI-{p.id:03d}", "500", "shopify",
-                "50", "deny", "manual",
-                f"{p.selling_price:.2f}", f"{compare:.2f}",
-                "true", "true", image_src, "1", "active"
-            ])
-            rows_written += 1
-            if rows_written >= 100:
-                break
-
-    # Always append AI catalog items as additional products
-    for item in ai_catalog:
-        handle = item["title"].lower().replace(" ", "-").replace(",", "")[:50]
+        # Shopify required headers
         writer.writerow([
-            handle, item["title"], item["desc"],
-            "CoaiHome", "Home & Garden", item["type"],
-            "organizer, home, storage, coaihome", "true",
-            "Title", "Default Title",
-            f"COAI-{handle[:10].upper()}", "500", "shopify",
-            "50", "deny", "manual",
-            f"{item['price']:.2f}", f"{item['compare']:.2f}",
-            "true", "true", "", "1", "active"
+            "Handle", "Title", "Body (HTML)", "Vendor", "Product Category",
+            "Type", "Tags", "Published", "Option1 Name", "Option1 Value",
+            "Variant SKU", "Variant Grams", "Variant Inventory Tracker",
+            "Variant Inventory Qty", "Variant Inventory Policy",
+            "Variant Fulfillment Service", "Variant Price",
+            "Variant Compare At Price", "Variant Requires Shipping",
+            "Variant Taxable", "Image Src", "Image Position",
+            "Status"
         ])
 
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=coaihome_shopify_products.csv"}
-    )
+        ai_catalog = [
+            {"title": "Bamboo Kitchen Drawer Organizer", "price": 34.99, "compare": 48.99, "desc": "Expandable bamboo drawer dividers. Keep your kitchen tools perfectly organized.", "type": "Kitchen Organization"},
+            {"title": "Stackable Fridge Storage Bins Set of 4", "price": 42.99, "compare": 59.99, "desc": "Crystal-clear stackable bins designed for refrigerators. Maximize fridge space instantly.", "type": "Kitchen Organization"},
+            {"title": "Rotating Makeup and Skincare Organizer", "price": 52.99, "compare": 74.99, "desc": "360 degree spinning tower with 20 storage sections. Keep beauty products accessible.", "type": "Bathroom Organization"},
+            {"title": "Magnetic Spice Rack 12 Jars Included", "price": 45.99, "compare": 64.99, "desc": "Wall-mounted magnetic spice storage system. Saves counter space and keeps spices visible.", "type": "Kitchen Organization"},
+            {"title": "Under-Sink Cabinet Organizer 2-Tier", "price": 38.99, "compare": 54.99, "desc": "Adjustable 2-tier shelf maximizes under-sink space. Perfect for cleaning supplies.", "type": "Bathroom Organization"},
+            {"title": "Floating Wall Shelf Set of 3", "price": 56.99, "compare": 79.99, "desc": "Minimalist floating shelves for any room. Display photos, plants, and decor with style.", "type": "Office Organization"},
+            {"title": "Closet Shelf Dividers 6 Pack", "price": 24.99, "compare": 34.99, "desc": "Sturdy closet dividers for sweaters, jeans, and handbags. Install without tools.", "type": "Closet Organization"},
+            {"title": "Desktop File and Document Organizer", "price": 32.99, "compare": 45.99, "desc": "5-tier mesh file organizer for offices and home desks. Keep paperwork sorted.", "type": "Office Organization"},
+            {"title": "Pantry Storage Container Set 10 Piece", "price": 48.99, "compare": 68.99, "desc": "Airtight BPA-free containers for grains, pasta, and snacks. Includes labels and scoops.", "type": "Kitchen Organization"},
+            {"title": "Over-The-Door Shoe Organizer 30 Pockets", "price": 29.99, "compare": 42.99, "desc": "Space-saving door organizer for shoes and accessories. Fits any door.", "type": "Closet Organization"},
+            {"title": "Cable Management Box and Cord Organizer", "price": 27.99, "compare": 38.99, "desc": "Hide power strips and tangled cables in this sleek organizer box. Clean modern look.", "type": "Office Organization"},
+            {"title": "Hanging Purse and Handbag Organizer", "price": 36.99, "compare": 51.99, "desc": "Transparent hanging organizer for 12 bags. Clear pockets keep purses visible.", "type": "Closet Organization"},
+            {"title": "Bathroom Counter Organizer 3-Tier", "price": 31.99, "compare": 44.99, "desc": "3-tier rotating bathroom caddy for toiletries. Chrome finish looks premium.", "type": "Bathroom Organization"},
+            {"title": "Stackable Storage Drawers 3-Drawer", "price": 54.99, "compare": 76.99, "desc": "Clear stackable drawers perfect for makeup, office, or craft supplies.", "type": "Office Organization"},
+            {"title": "Garage Wall Tool Organizer Panel", "price": 67.99, "compare": 94.99, "desc": "Pegboard panel system for garage tools. Includes 20 hooks and 5 baskets.", "type": "Kitchen Organization"},
+        ]
+
+        # Use DB products if we have real ones with prices, otherwise use AI catalog
+        rows_written = 0
+        if products:
+            seen_titles = set()
+            for p in products:
+                try:
+                    if not p.title or p.selling_price is None:
+                        continue
+                    title_key = p.title.lower().strip()
+                    if title_key in seen_titles:
+                        continue
+                    seen_titles.add(title_key)
+
+                    handle = p.title.lower().replace(" ", "-").replace("&", "and").replace(",", "")[:50]
+                    compare = round(float(p.selling_price) * 1.4, 2)
+                    image_src = ""
+                    if p.ai_research_data and isinstance(p.ai_research_data, dict):
+                        image_src = p.ai_research_data.get("main_image", "")
+
+                    writer.writerow([
+                        handle, p.title, p.description or f"Premium {p.title}.",
+                        "CoaiHome", "Home & Garden", p.category or "Home Goods",
+                        "organizer, home, storage", "true",
+                        "Title", "Default Title",
+                        p.sku or f"COAI-{p.id:03d}", "500", "shopify",
+                        "50", "deny", "manual",
+                        f"{float(p.selling_price):.2f}", f"{compare:.2f}",
+                        "true", "true", image_src, "1", "active"
+                    ])
+                    rows_written += 1
+                except Exception as row_err:
+                    print(f"Error writing row for product {p.id}: {row_err}")
+                    continue
+
+        # Always append AI catalog items as additional products
+        for item in ai_catalog:
+            try:
+                handle = item["title"].lower().replace(" ", "-").replace(",", "")[:50]
+                writer.writerow([
+                    handle, item["title"], item["desc"],
+                    "CoaiHome", "Home & Garden", item["type"],
+                    "organizer, home, storage, coaihome", "true",
+                    "Title", "Default Title",
+                    f"COAI-{handle[:10].upper()}", "500", "shopify",
+                    "50", "deny", "manual",
+                    f"{float(item['price']):.2f}", f"{float(item['compare']):.2f}",
+                    "true", "true", "", "1", "active"
+                ])
+            except Exception as item_err:
+                print(f"Error writing item {item.get('title')}: {item_err}")
+
+        csv_content = output.getvalue()
+        output.close()
+        
+        return StreamingResponse(
+            io.BytesIO(csv_content.encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=coaihome_shopify_products.csv"}
+        )
+    except Exception as e:
+        print("CRITICAL ERROR IN EXPORT-CSV:")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/products/clean-duplicates")

@@ -970,12 +970,10 @@ header, .site-header, .header-wrapper {
                     if sec_type in ("image-banner", "slideshow", "banner", "hero", "image-with-text"):
                         if sec_type == "image-with-text":
                              sett["heading"] = "Quality Home Essentials"
-                             sett["text"] = "<p>Discover premium home organization solutions for every room in your home.</p>"
+                             sett["text"] = "Discover premium home organization solutions for every room in your home."
                         else:
                             sett["heading"]    = "Organize Every Corner of Your Home"
                             sett["heading_size"] = "h1"
-                            # Dawn/Trade 'image-banner' doesn't usually have a 'subheading' setting on top, 
-                            # it has BLOCKS of type 'text'
                         
                         # Update all blocks for text/subheading
                         for bk, bv in sec.get("blocks", {}).items():
@@ -984,13 +982,14 @@ header, .site-header, .header-wrapper {
                             if btype in ("heading", "title"):
                                 bv["settings"]["heading"] = "Organize Every Corner of Your Home"
                             elif btype in ("text", "caption"):
-                                bv["settings"]["text"] = "<p>Premium home organization products — kitchen, bathroom, closet & office</p>"
+                                # Shopify JSON templates often reject HTML tags in plain text fields
+                                bv["settings"]["text"] = "Premium home organization products — kitchen, bathroom, closet & office"
                             elif btype == "buttons":
                                 bv["settings"]["button_label_1"] = "Shop All"
                                 bv["settings"]["button_link_1"] = "/collections/all-products"
                             elif btype in ("slide", "image"):
                                 bv["settings"]["heading"] = "Organize Every Corner of Your Home"
-                                bv["settings"]["subheading"] = "<p>Premium home organizers — kitchen, bath, closet & office</p>"
+                                bv["settings"]["subheading"] = "Premium home organizers — kitchen, bath, closet & office"
                                 bv["settings"]["button_label"] = "Shop Now"
                                 bv["settings"]["button_link"] = "/collections/all-products"
 
@@ -1001,10 +1000,10 @@ header, .site-header, .header-wrapper {
                         for bk, bv in sec.get("blocks", {}).items():
                             bv.setdefault("settings", {})
                             if bv.get("type") == "text":
-                                bv["settings"]["text"] = "<p>Discover premium home organization solutions for every room in your home. Free shipping on orders over $50.</p>"
+                                bv["settings"]["text"] = "Discover premium home organization solutions for every room in your home. Free shipping on orders over $50."
                         # Fallback if theme uses section-level setting
-                        if "text" in sett: sett["text"] = "<p>Welcome to CoaiHome</p>"
-                        if "content" in sett: sett["content"] = "<p>Welcome to CoaiHome</p>"
+                        if "text" in sett: sett["text"] = "Welcome to CoaiHome"
+                        if "content" in sett: sett["content"] = "Welcome to CoaiHome"
 
                     # ─── Collection list / featured categories ─────────────────
                     elif sec_type in (
@@ -1050,7 +1049,7 @@ header, .site-header, .header-wrapper {
                             if i < len(testimonials):
                                 t = testimonials[i]
                                 bv["settings"]["heading"]  = t[0]
-                                bv["settings"]["text"]     = f"<p>{t[1]}</p>"
+                                bv["settings"]["text"]     = t[1]
                                 bv["settings"]["author"]   = t[2]
 
                     # ─── Multicolumn / features / "You're set up for success" ──
@@ -1067,9 +1066,9 @@ header, .site-header, .header-wrapper {
                             bv.setdefault("settings", {})
                             if i < len(features):
                                 bv["settings"]["heading"]     = features[i][0]
-                                bv["settings"]["text"]        = f"<p>{features[i][1]}</p>"
+                                bv["settings"]["text"]        = features[i][1]
                                 if "description" in bv["settings"]:
-                                    bv["settings"]["description"] = f"<p>{features[i][1]}</p>"
+                                    bv["settings"]["description"] = features[i][1]
 
                     sec["settings"] = sett
 
