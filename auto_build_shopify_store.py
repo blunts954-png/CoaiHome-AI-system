@@ -250,7 +250,7 @@ class AutomaticShopifyBuilder:
                 {"title": "Garage Wall Tool Organizer Panel", "price": 67.99, "description": "Pegboard panel system for garage tools. Includes 20 hooks and 5 baskets. Install in 30 min."},
             ]
         
-        # Step 2: Push each product to Shopify
+        # Step 2: Push each product to Shopify (skip existing ones)
         created = []
         db = SessionLocal()
         
@@ -268,8 +268,27 @@ class AutomaticShopifyBuilder:
             except Exception as e:
                 print(f"   [!] Could not get location for inventory: {e}")
             
+            # Fetch existing product titles from Shopify to avoid duplicates
+            existing_titles = set()
+            try:
+                titles_resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/products.json?limit=250&fields=title",
+                    headers=headers
+                )
+                if titles_resp.status_code == 200:
+                    for ep in titles_resp.json().get("products", []):
+                        existing_titles.add(ep.get("title", "").lower().strip())
+                print(f"   Found {len(existing_titles)} existing products in Shopify — will skip duplicates")
+            except Exception as e:
+                print(f"   Warning: Could not check existing products: {e}")
+            
             for p in products_to_create:
                 try:
+                    # Skip if product already exists in Shopify
+                    if p["title"].lower().strip() in existing_titles:
+                        print(f"   ⏩ Skipped (already exists): {p['title'][:50]}")
+                        continue
+                    
                     images = []
                     if p.get("image"):
                         images.append({"src": p["image"]})

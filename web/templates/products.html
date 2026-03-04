@@ -275,7 +275,13 @@
             }
 
             tbody.innerHTML = data.products.map(p => {
-                const margin = p.selling_price > 0 ? ((p.selling_price - p.cost_price) / p.selling_price * 100).toFixed(1) : '0';
+                let marginDisplay = 'N/A';
+                let marginColor = '#94a3b8';
+                if (p.cost_price > 0 && p.selling_price > 0) {
+                    const margin = ((p.selling_price - p.cost_price) / p.selling_price * 100).toFixed(1);
+                    marginDisplay = margin + '%';
+                    marginColor = margin > 30 ? '#10b981' : '#f59e0b';
+                }
                 const statusClass = p.status === 'active' ? 'badge-active' : (p.status === 'draft' ? 'badge-draft' : 'badge-pending');
                 return `
                 <tr>
@@ -285,7 +291,7 @@
                             <div class="img-preview" style="background-image: url('${p.image_url || ''}'); background-size: cover;"></div>
                             <div>
                                 <div style="font-weight: 600;">${p.title}</div>
-                                <div style="font-size: 0.75rem; color: #64748b;">${p.supplier_name || 'Generic'}</div>
+                                <div style="font-size: 0.75rem; color: #64748b;">${p.supplier_name || 'CoaiHome'}</div>
                             </div>
                         </div>
                     </td>
@@ -293,7 +299,7 @@
                     <td><div style="font-size: 0.75rem; color: #475569;">${p.category || 'Home Goods'}</div></td>
                     <td style="font-weight: 700;">$${Number(p.selling_price || 0).toFixed(2)}</td>
                     <td>
-                        <div style="color: ${margin > 30 ? '#10b981' : '#f59e0b'}; font-weight: 600;">${margin}%</div>
+                        <div style="color: ${marginColor}; font-weight: 600;">${marginDisplay}</div>
                     </td>
                 </tr>
             `;

@@ -398,6 +398,12 @@
                     <button class="btn btn-success" onclick="startFullAutomation()">
                         ⚡ Start Automation
                     </button>
+                    <a href="/api/products/export-csv" class="btn btn-primary" download="coaihome_products.csv">
+                        ⬇️ Download CSV
+                    </a>
+                    <button class="btn btn-secondary" onclick="cleanDuplicates()">
+                        🧹 Clean Duplicates
+                    </button>
                     <a href="/products" class="btn btn-secondary">
                         🛍️ Browse Catalog
                     </a>
@@ -631,6 +637,21 @@
         entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="${statusClass}">${message}</span>`;
         logDiv.appendChild(entry);
         logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    // Clean duplicates function
+    async function cleanDuplicates() {
+        log('🧹 Cleaning duplicate products from database...', 'info');
+        try {
+            const data = await apiRequest('/api/products/clean-duplicates', { method: 'POST' });
+            if (data.status === 'success') {
+                log(`✅ Cleaned ${data.deleted} duplicates — ${data.remaining} unique products remain`, 'success');
+            } else {
+                log(`❌ Clean failed: ${data.message}`, 'error');
+            }
+        } catch (e) {
+            log('❌ Clean duplicates error: ' + e.message, 'error');
+        }
     }
 
     // Initialize
