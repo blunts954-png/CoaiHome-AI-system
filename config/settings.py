@@ -10,7 +10,9 @@ from functools import lru_cache
 from dotenv import load_dotenv
 
 # Explicitly load .env file before defining settings
-load_dotenv(override=True)
+# Set override=False so system-provided env vars (like Railway's DATABASE_URL)
+# take precedence over local .env files.
+load_dotenv(override=False)
 
 
 class ShopifyConfig(BaseSettings):
@@ -174,7 +176,13 @@ class Settings(BaseSettings):
         # Override database_url from env (DATABASE_URL)
         db_url_env = os.getenv("DATABASE_URL")
         if db_url_env is not None:
-            self.system.database_url = db_url_env
+            # Clean possible quotes or template brackets
+            db_url_env = db_url_env.strip(' "\'')
+            if "${{" in db_url_env:
+                # This is a template placeholder, ignore it and use default
+                pass
+            elif db_url_env:
+                self.system.database_url = db_url_env
         
         return self
 

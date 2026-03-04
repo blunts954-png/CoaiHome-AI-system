@@ -16,22 +16,49 @@ from config.settings import settings
 # Handle Railway's DATABASE_URL format
 # Railway uses postgres:// but SQLAlchemy needs postgresql://
 db_url = settings.system.database_url
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+# Clean up URL (remove quotes, brackets, whitespace)
+if isinstance(db_url, str):
+    db_url = db_url.strip(' "\'')
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    
+    # Check for un-interpolated Railway templates
+    if "${{" in db_url:
+        print("⚠️  Warning: DATABASE_URL contains a template placeholder. Falling back to SQLite.")
+        db_url = "sqlite:///./dropshipping_ai.db"
 
 # Create database directory if it doesn't exist (for SQLite)
 if "sqlite" in db_url:
     db_path = db_url.replace("sqlite:///", "")
+    # Handle both Unix and Windows paths
+    db_path = db_path.replace("\\", "/")
     db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
         os.makedirs(db_dir, exist_ok=True)
 
 Base = declarative_base()
-engine = create_engine(
-    db_url, 
-    connect_args={"check_same_thread": False} if "sqlite" in db_url else {},
-    pool_pre_ping=True  # Check connection before using (helps with Railway)
-)
+
+try:
+    engine = create_engine(
+        db_url, 
+        connect_args={"check_same_thread": False} if "sqlite" in db_url else {},
+        pool_pre_ping=True  # Check connection before using (helps with Railway)
+    )
+    # Test connection
+    with engine.connect() as conn:
+        pass
+except Exception as e:
+    print(f"❌ Error: Could not connect to database with URL: {db_url}")
+    print(f"Details: {e}")
+    print("⚠️  Falling back to local SQLite database...")
+    db_url = "sqlite:///./dropshipping_ai.db"
+    engine = create_engine(
+        db_url,
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
