@@ -9,7 +9,7 @@ import hashlib
 import hmac
 import time
 from urllib.parse import urlencode, parse_qs, urlparse
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import sys
 import os
 
