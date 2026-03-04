@@ -19,22 +19,16 @@
         }
 
         body {
-            background-color: #0b0f19;
-            background-image:
-                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
-            background-attachment: fixed;
-            color: #e2e8f0;
+            background-color: #f1f5f9;
+            background-image: none;
+            color: #1e293b;
             min-height: 100vh;
             line-height: 1.5;
         }
 
         .navbar {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
             padding: 1rem 2rem;
             display: flex;
             justify-content: space-between;
@@ -42,14 +36,13 @@
             position: sticky;
             top: 0;
             z-index: 1000;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .navbar h1 {
             font-size: 1.25rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            color: #4f46e5;
             letter-spacing: -0.025em;
         }
 
@@ -59,196 +52,137 @@
         }
 
         .nav-links a {
-            color: #94a3b8;
+            color: #475569;
             text-decoration: none;
             font-size: 0.9rem;
             font-weight: 500;
-            transition: all 0.3s ease;
-            position: relative;
+            transition: all 0.2s;
         }
 
         .nav-links a:hover {
-            color: #f8fafc;
-        }
-
-        .nav-links a::after {
-            content: '';
-            position: absolute;
-            width: 0%;
-            height: 2px;
-            bottom: -4px;
-            left: 0;
-            background: linear-gradient(90deg, #6366f1, #a855f7);
-            transition: width 0.3s ease;
-            border-radius: 2px;
-        }
-
-        .nav-links a:hover::after {
-            width: 100%;
+            color: #4f46e5;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 2.5rem 2rem;
+            padding: 2rem;
         }
 
-        /* Glassmorphism Overrides */
-        .card,
-        .stat-card {
-            background: rgba(30, 41, 59, 0.4) !important;
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        /* Cards */
+        .card {
+            background: white !important;
+            border: 1px solid #e2e8f0 !important;
             border-radius: 16px !important;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
-            color: white !important;
-        }
-
-        .stat-card:hover {
-            border-color: rgba(255, 255, 255, 0.15) !important;
-            background: rgba(30, 41, 59, 0.6) !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+            overflow: hidden;
         }
 
         .card-header {
-            background: rgba(15, 23, 42, 0.3) !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            background: #f8fafc !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            padding: 1.25rem 1.5rem;
         }
 
         .card-header h2 {
-            color: #f8fafc !important;
+            color: #1e293b !important;
             font-weight: 600 !important;
+            font-size: 1.1rem;
         }
 
-        /* Typography overrides for dark mode */
-        h1,
-        h2,
-        h3,
-        .stat-card .value {
-            color: #f8fafc !important;
+        /* Stat Cards */
+        .stat-card {
+            background: white !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 16px !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
         }
 
         .stat-card h3 {
-            color: #94a3b8 !important;
+            color: #64748b !important;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-card .value {
+            color: #1e293b !important;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        /* Typography */
+        h1,
+        h2,
+        h3 {
+            color: #1e293b;
         }
 
         /* Forms */
         .form-control {
-            background: rgba(15, 23, 42, 0.5) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            color: white !important;
+            background: white !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #1e293b !important;
             border-radius: 10px !important;
             padding: 0.75rem 1rem !important;
-            transition: all 0.3s ease !important;
         }
 
         .form-control:focus {
             outline: none !important;
-            border-color: #6366f1 !important;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
-            background: rgba(15, 23, 42, 0.8) !important;
-        }
-
-        .form-group label {
-            color: #cbd5e1 !important;
+            border-color: #4f46e5 !important;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2) !important;
         }
 
         /* Buttons */
         .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
             border: none;
-            border-radius: 10px !important;
-            font-weight: 600 !important;
-            letter-spacing: 0.025em;
-            text-transform: uppercase;
-            font-size: 0.8rem !important;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            position: relative;
-            overflow: hidden;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
-            color: white !important;
-            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3) !important;
+            background: #4f46e5;
+            color: white;
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(79, 70, 229, 0.5) !important;
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-            color: white !important;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2) !important;
-        }
-
-        .btn-success:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4) !important;
+            background: #4338ca;
         }
 
         .btn-secondary {
-            background: rgba(241, 245, 249, 0.1) !important;
-            color: #f8fafc !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
         }
 
         .btn-secondary:hover {
-            background: rgba(241, 245, 249, 0.2) !important;
+            background: #e2e8f0;
         }
 
-        /* Tables */
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        /* Links */
+        a {
+            color: #4f46e5;
+            text-decoration: none;
         }
 
-        th {
-            font-weight: 600 !important;
-            color: #94a3b8 !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-            padding: 1rem !important;
-        }
-
-        td {
-            color: #cbd5e1 !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
-            padding: 1rem !important;
-        }
-
-        tr:hover td {
-            background: rgba(255, 255, 255, 0.02) !important;
-        }
-
-        /* Scrollbar styling for that extra premium feel */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
-        }
-
-        /* Specific overrides for the hero section block to blend perfectly */
-        .hero-section {
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        }
-
-        @media (max-width: 768px) {
-            .nav-links {
-                display: none;
-            }
+        a:hover {
+            text-decoration: underline;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -256,18 +190,16 @@
 
 <body>
     <nav class="navbar">
-        <h1><span style="opacity: 0.5;">🤖</span> JAKE ENGINE</h1>
+        <h1>🚀 CoaiHome AI</h1>
         <div class="nav-links">
-            <a href="/">Dashboard</a>
+            <a href="/dashboard">Dashboard</a>
             <a href="/products">Products</a>
             <a href="/pricing">Pricing</a>
             <a href="/exceptions">Exceptions</a>
         </div>
     </nav>
 
-    <div class="container">
-        {% block content %}{% endblock %}
-    </div>
+    {% block content %}{% endblock %}
 
     {% block extra_js %}{% endblock %}
 </body>

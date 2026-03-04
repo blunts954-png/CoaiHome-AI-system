@@ -3,291 +3,451 @@
 {% block extra_css %}
 <style>
     :root {
-        --glass-bg: rgba(255, 255, 255, 0.7);
-        --glass-border: rgba(255, 255, 255, 0.3);
-        --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-        --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        --primary: #4f46e5;
+        --primary-dark: #4338ca;
+        --success: #10b981;
+        --success-dark: #059669;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --dark: #1e293b;
+        --dark-bg: #0f172a;
+        --light: #f8fafc;
+        --gray-600: #475569;
+        --gray-500: #64748b;
+        --gray-400: #94a3b8;
+        --glass-bg: rgba(255, 255, 255, 0.95);
     }
 
     body {
-        background: radial-gradient(circle at top right, #f8fafc, #f1f5f9);
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        min-height: 100vh;
     }
 
-    .hero-section {
-        background: var(--accent-gradient);
-        color: white;
-        padding: 3rem 2rem;
-        border-radius: 16px;
-        margin-bottom: 2rem;
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    /* Header */
+    .header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.3);
+        margin-bottom: 2rem;
+        padding: 1.5rem 2rem;
+        background: var(--glass-bg);
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
 
-    .hero-content h1 {
-        font-size: 2.5rem;
+    .header h1 {
+        font-size: 1.75rem;
         font-weight: 800;
-        margin-bottom: 0.5rem;
-        letter-spacing: -0.025em;
+        color: var(--dark);
+        margin: 0;
     }
 
-    .hero-content p {
-        font-size: 1.1rem;
-        opacity: 0.9;
+    .header .subtitle {
+        color: var(--gray-600);
+        font-size: 0.9rem;
+        margin-top: 0.25rem;
     }
 
-    .launch-btn {
-        background: white;
-        color: #4f46e5;
-        padding: 1rem 2rem;
-        border-radius: 12px;
-        font-weight: 700;
-        font-size: 1.1rem;
-        border: none;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    .header-actions {
         display: flex;
-        align-items: center;
-        gap: 0.75rem;
+        gap: 1rem;
     }
 
-    .launch-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        background: #f8fafc;
-    }
-
+    /* Stats Grid */
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 1.5rem;
         margin-bottom: 2rem;
     }
 
     .stat-card {
         background: var(--glass-bg);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--glass-border);
-        padding: 1.5rem;
         border-radius: 16px;
-        transition: transform 0.3s ease;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        border-left: 4px solid var(--primary);
+        transition: transform 0.2s, box-shadow 0.2s;
     }
 
     .stat-card:hover {
-        transform: translateY(-5px);
+        transform: translateY(-4px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .stat-card.success {
+        border-left-color: var(--success);
+    }
+
+    .stat-card.warning {
+        border-left-color: var(--warning);
+    }
+
+    .stat-card.danger {
+        border-left-color: var(--danger);
     }
 
     .stat-card h3 {
-        color: #64748b;
-        font-size: 0.875rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--gray-600);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin-bottom: 0.5rem;
+        margin: 0 0 0.75rem 0;
     }
 
     .stat-card .value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #1e293b;
+        font-size: 2.25rem;
+        font-weight: 800;
+        color: var(--dark);
     }
 
-    .action-grid {
+    /* Main Grid */
+    .main-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        grid-template-columns: 1fr 400px;
         gap: 1.5rem;
     }
 
+    @media (max-width: 1024px) {
+        .main-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Cards */
     .card {
-        background: white;
+        background: var(--glass-bg);
         border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         overflow: hidden;
-        border: 1px solid #e2e8f0;
     }
 
     .card-header {
         padding: 1.25rem 1.5rem;
-        background: #f8fafc;
-        border-bottom: 1px solid #e2e8f0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
     }
 
     .card-header h2 {
         font-size: 1.1rem;
-        font-weight: 600;
-        color: #334155;
+        font-weight: 700;
+        margin: 0;
+        color: white;
     }
 
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    /* Buttons */
     .btn {
-        width: 100%;
-        padding: 0.875rem 1rem;
-        border-radius: 10px;
-        font-weight: 600;
-        text-align: center;
-        text-decoration: none;
-        display: flex;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
-        transition: all 0.2s;
+        padding: 0.875rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
         font-size: 0.95rem;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        width: 100%;
+    }
+
+    .btn+.btn {
+        margin-top: 0.75rem;
     }
 
     .btn-primary {
-        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-        color: white !important;
-        border: none;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
     }
 
     .btn-primary:hover {
-        background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, var(--success) 0%, var(--success-dark) 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
     }
 
     .btn-secondary {
-        background: #f1f5f9;
-        color: #334155;
-        border: 1px solid #cbd5e1;
-        font-weight: 600;
+        background: var(--light);
+        color: var(--dark);
+        border: 2px solid #e2e8f0;
     }
 
     .btn-secondary:hover {
         background: #e2e8f0;
+        border-color: #cbd5e1;
     }
 
-    .btn-success {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white !important;
-        border: none;
+    .btn-launch {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        color: white;
+        font-size: 1.1rem;
+        padding: 1rem 2rem;
+        box-shadow: 0 4px 20px rgba(139, 92, 246, 0.5);
     }
 
-    .btn-success:hover {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    .btn-launch:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(139, 92, 246, 0.6);
     }
 
-    #system-log::-webkit-scrollbar {
-        width: 8px;
+    /* System Log */
+    .log-container {
+        background: var(--dark-bg);
+        border-radius: 12px;
+        padding: 1.25rem;
+        height: 400px;
+        overflow-y: auto;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.85rem;
+        line-height: 1.7;
     }
 
-    #system-log::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
+    .log-entry {
+        padding: 0.25rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .log-time {
+        color: #64748b;
+        margin-right: 0.75rem;
+    }
+
+    .log-message {
+        color: #e2e8f0;
+    }
+
+    .log-success {
+        color: #4ade80;
+    }
+
+    .log-error {
+        color: #f87171;
+    }
+
+    .log-warning {
+        color: #fbbf24;
+    }
+
+    .log-info {
+        color: #38bdf8;
+    }
+
+    /* Status Grid */
+    .status-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: var(--light);
         border-radius: 10px;
     }
 
-    /* Improved visibility styles */
-    .stat-card h3 {
-        color: #475569;
-        font-size: 0.875rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.5rem;
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--success);
+    }
+
+    .status-dot.offline {
+        background: var(--danger);
+    }
+
+    .status-dot.warning {
+        background: var(--warning);
+    }
+
+    .status-item span {
         font-weight: 600;
+        color: var(--dark);
+        font-size: 0.9rem;
     }
 
-    .stat-card .value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #0f172a;
+    /* Button Grid */
+    .button-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
     }
 
-    #system-status {
-        color: #334155 !important;
+    @media (max-width: 640px) {
+        .button-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
-    #system-status strong {
-        color: #1e293b !important;
+    /* Scrollbar */
+    .log-container::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .log-container::-webkit-scrollbar-track {
+        background: var(--dark-bg);
+    }
+
+    .log-container::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 4px;
+    }
+
+    /* Animation */
+    @keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
+    }
+
+    .pulse {
+        animation: pulse 2s ease-in-out infinite;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="hero-section">
-    <div class="hero-content">
-        <h1>Welcome, Boss.</h1>
-        <p>Jake Engine is ready. Your store is at your fingertips.</p>
-    </div>
-    <button class="launch-btn" onclick="buildStore()">
-        <span>🚀 LAUNCH AI STORE BUILDER</span>
-    </button>
-</div>
-
-<div class="stats-grid">
-    <div class="stat-card">
-        <h3>Live Catalog</h3>
-        <div class="value" id="active-products">-</div>
-    </div>
-    <div class="stat-card">
-        <h3>Research Queue</h3>
-        <div class="value" id="pending-products">-</div>
-    </div>
-    <div class="stat-card">
-        <h3>AI Price Suggestions</h3>
-        <div class="value" id="pending-pricing">-</div>
-    </div>
-    <div class="stat-card">
-        <h3>Fulfillment Alerts</h3>
-        <div class="value" id="open-exceptions">-</div>
-    </div>
-</div>
-
-<div class="action-grid">
-    <div class="card">
-        <div class="card-header">
-            <h2>🛠️ High-Level Controls</h2>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <div>
+            <h1>🚀 CoaiHome Control Center</h1>
+            <div class="subtitle">AI-Powered Dropshipping Automation</div>
         </div>
-        <div class="card-body" style="padding: 1.5rem;">
-            <div style="display: grid; gap: 0.75rem;">
-                <button class="btn btn-primary" onclick="runResearch()">
-                    🔍 Research Winning Products
-                </button>
-                <button class="btn btn-primary" onclick="runResearchNoAPI()">
-                    📦 Quick Niche Import
-                </button>
-                <button class="btn btn-secondary" onclick="syncWithShopify()">
-                    🔄 Sync Data from Shopify
-                </button>
-                <button class="btn btn-primary" onclick="runPricing()">
-                    💰 Optimize All Pricing
-                </button>
-                <button class="btn btn-success" onclick="generateTikTokContent()">
-                    📱 Create TikTok Scripts
-                </button>
-                <button class="btn btn-success" onclick="startFullAutomation()"
-                    style="background: var(--success-gradient); color: white; border: none;">
-                    ⚡ ACTIVATE 24/7 AUTOMATION
-                </button>
-                <a href="/products" class="btn btn-secondary" id="products-link">
-                    🛍️ Browse Local Catalog
-                </a>
+        <button class="btn btn-launch" onclick="buildStore()">
+            🚀 LAUNCH AI STORE
+        </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card success">
+            <h3>Live Products</h3>
+            <div class="value" id="active-products">-</div>
+        </div>
+        <div class="stat-card warning">
+            <h3>Pending Approval</h3>
+            <div class="value" id="pending-products">-</div>
+        </div>
+        <div class="stat-card">
+            <h3>Price Changes</h3>
+            <div class="value" id="pending-pricing">-</div>
+        </div>
+        <div class="stat-card danger">
+            <h3>Open Alerts</h3>
+            <div class="value" id="open-exceptions">-</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-grid">
+        <!-- Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h2>⚡ Quick Actions</h2>
+            </div>
+            <div class="card-body">
+                <div class="button-grid">
+                    <button class="btn btn-primary" onclick="runResearch()">
+                        🔍 Research Products
+                    </button>
+                    <button class="btn btn-primary" onclick="runResearchNoAPI()">
+                        📦 Quick Import
+                    </button>
+                    <button class="btn btn-secondary" onclick="syncWithShopify()">
+                        🔄 Sync Shopify
+                    </button>
+                    <button class="btn btn-primary" onclick="runPricing()">
+                        💰 Optimize Pricing
+                    </button>
+                    <button class="btn btn-success" onclick="generateTikTokContent()">
+                        📱 TikTok Content
+                    </button>
+                    <button class="btn btn-success" onclick="startFullAutomation()">
+                        ⚡ Start Automation
+                    </button>
+                    <a href="/products" class="btn btn-secondary">
+                        🛍️ Browse Catalog
+                    </a>
+                    <a href="/exceptions" class="btn btn-secondary">
+                        ⚠️ View Alerts
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Log -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📋 Activity Log</h2>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <div class="log-container" id="system-log">
+                    <div class="log-entry">
+                        <span class="log-time">[--:--:--]</span>
+                        <span class="log-message">System ready. Click an action to begin.</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card" style="display: flex; flex-direction: column;">
+    <!-- Status -->
+    <div class="card" style="margin-top: 1.5rem;">
         <div class="card-header">
-            <h2>📜 System Operations</h2>
-            <button class="btn btn-sm btn-secondary" style="width: auto;" onclick="clearLog()">Clear</button>
+            <h2>🔗 System Status</h2>
         </div>
-        <div class="card-body" style="flex: 1; padding: 0;">
-            <div id="system-log"
-                style="height: 350px; overflow-y: auto; background: #0f172a; color: #e2e8f0; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 0.85rem; padding: 1.25rem; line-height: 1.6;">
-                <div>[SYSTEM] Initialized. Awaiting command...</div>
+        <div class="card-body">
+            <div class="status-grid" id="system-status">
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Shopify: Connected</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Database: Online</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Automation: Ready</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Engine: Active</span>
+                </div>
             </div>
-        </div>
-    </div>
-</div>
-
-<div class="card" style="margin-top: 1.5rem;">
-    <div class="card-header">
-        <h2>🛠️ Backend Monitors</h2>
-    </div>
-    <div class="card-body">
-        <div id="system-status"
-            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.85rem; color: #64748b;">
-            <div>Loading connectivity status...</div>
         </div>
     </div>
 </div>
@@ -295,6 +455,7 @@
 
 {% block extra_js %}
 <script>
+    // API Helper
     async function apiRequest(url, options = {}) {
         try {
             const response = await fetch(url, options);
@@ -302,11 +463,12 @@
             if (!response.ok) throw new Error(data.detail || data.message || 'API Error');
             return data;
         } catch (error) {
-            log('Error: ' + error.message);
+            log('Error: ' + error.message, 'error');
             throw error;
         }
     }
 
+    // Load Stats
     async function loadStats() {
         try {
             const data = await apiRequest('/api/stats');
@@ -314,27 +476,24 @@
             document.getElementById('pending-products').textContent = data.pending_products || 0;
             document.getElementById('pending-pricing').textContent = data.pending_price_changes || 0;
             document.getElementById('open-exceptions').textContent = data.open_exceptions || 0;
-
-            const productsLink = document.getElementById('products-link');
-            if (data.active_products > 0) {
-                productsLink.innerHTML = `🛍️ Browse Local Catalog (${data.active_products} Live)`;
-            }
         } catch (e) { }
     }
 
+    // Sync with Shopify
     async function syncWithShopify() {
-        log('Pinging Shopify for data sync...');
+        log('Syncing with Shopify...', 'info');
         try {
             const data = await apiRequest('/api/system/sync-shopify', { method: 'POST' });
-            log(data.message);
+            log(data.message, 'success');
         } catch (e) {
-            log('Sync failed: ' + e.message);
+            log('Sync failed: ' + e.message, 'error');
         }
     }
 
+    // Build Store
     async function buildStore() {
-        if (!confirm('This will trigger the full AI Store Builder. It will research products, build pages, and configure your theme. Continue?')) return;
-        log('INITIATING FULL STORE BUILD...');
+        if (!confirm('Launch AI Store Builder? This will update your store pages and collections.')) return;
+        log('Starting AI Store Builder...', 'info');
         try {
             const data = await apiRequest('/api/stores/create', {
                 method: 'POST',
@@ -345,86 +504,111 @@
                     brand_tone: "luxury"
                 })
             });
-            log(data.message);
+            log(data.message, 'success');
         } catch (e) {
-            log('Build failed: ' + e.message);
+            log('Build failed: ' + e.message, 'error');
         }
     }
 
+    // Run Research
     async function runResearch() {
-        log('Searching for winning products in your niche...');
+        log('Running product research...', 'info');
         try {
             const data = await apiRequest('/api/research/run?store_id=1', { method: 'POST' });
-            log('Research in progress. New products will appear in Research Queue.');
-        } catch (e) { log('Research error: ' + e.message); }
+            log('Research started. Check queue for new products.', 'success');
+        } catch (e) {
+            log('Research error: ' + e.message, 'error');
+        }
     }
 
+    // Quick Import
     async function runResearchNoAPI() {
-        log('Quick-sourcing products from AI catalog...');
+        log('Quick importing products...', 'info');
         try {
             const data = await apiRequest('/api/research/no-api?niche=home%20organization&limit=20', { method: 'POST' });
-            log('Imported ' + data.products_found + ' products for approval.');
+            log('Imported ' + data.products_found + ' products!', 'success');
             loadStats();
-        } catch (e) { log('Quick import error: ' + e.message); }
+        } catch (e) {
+            log('Import error: ' + e.message, 'error');
+        }
     }
 
+    // Pricing
     async function runPricing() {
-        log('Analyzing market trends and optimizing prices...');
+        log('Optimizing prices...', 'info');
         try {
             const data = await apiRequest('/api/pricing/optimize', { method: 'POST' });
-            log('Analysis complete. Check Price Suggestions.');
+            log('Pricing optimized!', 'success');
             loadStats();
-        } catch (e) { log('Pricing error: ' + e.message); }
+        } catch (e) {
+            log('Pricing error: ' + e.message, 'error');
+        }
     }
 
-    async function syncInventory() {
-        log('Verifying stock levels with suppliers...');
-        try {
-            await apiRequest('/api/inventory/sync', { method: 'POST' });
-            log('Stock sync complete.');
-        } catch (e) { log('Inventory error: ' + e.message); }
-    }
-
+    // TikTok Content
     async function generateTikTokContent() {
-        log('Generating viral content scripts...');
+        log('Generating TikTok content...', 'info');
         try {
             const data = await apiRequest('/api/tiktok/generate-content', { method: 'POST' });
-            log('Scripts ready! Check content_calendar.csv');
-        } catch (e) { log('TikTok error: ' + e.message); }
+            log('Content generated! Check content_calendar.csv', 'success');
+        } catch (e) {
+            log('TikTok error: ' + e.message, 'error');
+        }
     }
 
+    // Full Automation
     async function startFullAutomation() {
-        log('ACTIVATING 24/7 AUTOPILOT...');
+        log('Starting 24/7 automation...', 'info');
         try {
             const data = await apiRequest('/api/full-automation/start', { method: 'POST' });
-            log('Automation online. Jake is now managing your store.');
-        } catch (e) { log('Activation error: ' + e.message); }
+            log(data.message, 'success');
+        } catch (e) {
+            log('Automation error: ' + e.message, 'error');
+        }
     }
 
+    // Load System Status
     async function loadSystemStatus() {
         try {
             const data = await apiRequest('/api/system/status');
             const statusDiv = document.getElementById('system-status');
-            statusDiv.innerHTML = `
-            <div><strong>Shopify:</strong> ${data.shopify_connected ? '🟢 Connected' : '🔴 Outage'}</div>
-            <div><strong>Database:</strong> 🟢 Online</div>
-            <div><strong>Sync Status:</strong> Ready</div>
-            <div><strong>Engine:</strong> ${data.mode}</div>
-        `;
 
-            // Also load DB logs
+            const shopifyStatus = data.shopify_connected ? 'online' : 'offline';
+            const shopifyClass = data.shopify_connected ? '' : 'offline';
+
+            statusDiv.innerHTML = `
+                <div class="status-item">
+                    <div class="status-dot ${shopifyClass}"></div>
+                    <span>Shopify: ${shopifyStatus}</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Database: Online</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Mode: ${data.mode || 'Shopify-Only'}</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot"></div>
+                    <span>Engine: Active</span>
+                </div>
+            `;
+
+            // Also load logs
             const logData = await apiRequest('/api/system/logs');
             if (logData.logs && logData.logs.length > 0) {
                 const logDiv = document.getElementById('system-log');
-                // Only update if we have new logs
-                // For simplicity, we just clear and re-render the last 20
                 logDiv.innerHTML = '';
-                logData.logs.reverse().forEach(l => {
+                logData.logs.slice(-20).reverse().forEach(l => {
                     const entry = document.createElement('div');
-                    entry.style.padding = '3px 0';
-                    // Brighter colors for better visibility
-                    const color = l.status === 'failed' ? '#f87171' : (l.status === 'pending' ? '#fbbf24' : '#4ade80');
-                    entry.innerHTML = `<span style="color: #94a3b8;">[${l.timestamp}]</span> <span style="color: ${color}; font-weight: bold;">[${l.type.toUpperCase()}]</span> <span style="color: #e2e8f0;">${l.message}</span>`;
+                    entry.className = 'log-entry';
+                    let statusClass = 'log-info';
+                    if (l.status === 'failed') statusClass = 'log-error';
+                    else if (l.status === 'pending') statusClass = 'log-warning';
+                    else if (l.status === 'success') statusClass = 'log-success';
+
+                    entry.innerHTML = `<span class="log-time">[${l.timestamp}]</span> <span class="${statusClass}">[${l.type.toUpperCase()}]</span> ${l.message || ''}`;
                     logDiv.appendChild(entry);
                 });
                 logDiv.scrollTop = logDiv.scrollHeight;
@@ -432,24 +616,27 @@
         } catch (e) { }
     }
 
-    function log(message) {
+    // Log function
+    function log(message, type = 'info') {
         const logDiv = document.getElementById('system-log');
         const time = new Date().toLocaleTimeString();
         const entry = document.createElement('div');
-        entry.style.padding = '3px 0';
-        entry.innerHTML = `<span style="color: #94a3b8;">[${time}]</span> <span style="color: #e2e8f0;">${message}</span>`;
+        entry.className = 'log-entry';
+
+        let statusClass = 'log-info';
+        if (type === 'success') statusClass = 'log-success';
+        else if (type === 'error') statusClass = 'log-error';
+        else if (type === 'warning') statusClass = 'log-warning';
+
+        entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="${statusClass}">${message}</span>`;
         logDiv.appendChild(entry);
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    function clearLog() {
-        document.getElementById('system-log').innerHTML = '<div>[SYSTEM] Log cleared.</div>';
-    }
-
-    // Init
+    // Initialize
     loadStats();
     loadSystemStatus();
     setInterval(loadStats, 15000);
-    log('Jake Control Panel v2.0 ready.');
+    log('Control panel ready.');
 </script>
 {% endblock %}

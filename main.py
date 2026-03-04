@@ -1164,7 +1164,11 @@ async def start_full_automation():
         auto.running = True
         
         def run_scheduler():
-            asyncio.run(auto.start_scheduler())
+            try:
+                auto.start_scheduler()
+            except Exception as e:
+                auto.running = False
+                print(f"ERROR in automation scheduler: {e}")
         
         thread = threading.Thread(target=run_scheduler, daemon=True)
         thread.start()
