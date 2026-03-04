@@ -107,9 +107,19 @@ class AutomaticShopifyBuilder:
                 results["steps_failed"].append("Navigation")
                 print("   WARNING: Navigation requires manual setup")
             print()
-            
+
+            # Step 7: Rewrite homepage template (the critical piece)
+            print("STEP 7: Building homepage content...")
+            if await self._configure_homepage_template():
+                results["steps_completed"].append("Homepage template built")
+                print("   OK: Homepage configured with CoaiHome content")
+            else:
+                results["steps_failed"].append("Homepage template")
+                print("   WARNING: Homepage template could not be written")
+            print()
+
             results["status"] = "completed"
-            
+
         except Exception as e:
             results["status"] = "failed"
             results["error"] = str(e)
@@ -830,7 +840,315 @@ header, .site-header, .header-wrapper {
                 except Exception as e:
                     print(f"   ⚠️  Menu error for '{menu['title']}': {e}")
 
-        return success > 0
+    async def _configure_homepage_template(self) -> bool:
+        """
+        The critical missing piece: rewrite templates/index.json on the active theme
+        to replace ALL placeholder content with real CoaiHome content.
+
+        This controls:
+          - Hero banner heading / subheading / button text
+          - Featured collections (which collection handles to show)
+          - Featured products section
+          - Testimonials
+          - Announcement bar text
+        """
+        if not self.access_token:
+            return False
+
+        import httpx, json
+        verify_ssl = os.getenv("SHOPIFY_SSL_VERIFY", "true").lower() == "true"
+        headers = {
+            "X-Shopify-Access-Token": self.access_token,
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(verify=verify_ssl, timeout=30.0) as client:
+                # 1. Find active theme
+                resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes.json",
+                    headers=headers
+                )
+                themes = resp.json().get("themes", [])
+                active = next((t for t in themes if t.get("role") == "main"), themes[0] if themes else None)
+                if not active:
+                    print("   [!] No active theme found")
+                    return False
+
+                theme_id = active["id"]
+
+                # 2. Get collection IDs for our collections
+                coll_resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/custom_collections.json?limit=50",
+                    headers=headers
+                )
+                coll_map = {}
+                for c in coll_resp.json().get("custom_collections", []):
+                    coll_map[c["handle"]] = c["id"]
+                
+                # Also get smart/default collections
+                sc_resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/smart_collections.json?limit=50",
+                    headers=headers
+                )
+                for c in sc_resp.json().get("smart_collections", []):
+                    coll_map[c["handle"]] = c["id"]
+
+                kitchen_id   = coll_map.get("kitchen")
+                bathroom_id  = coll_map.get("bathroom")
+                closet_id    = coll_map.get("closet")
+                office_id    = coll_map.get("office")
+                all_id       = coll_map.get("all-products") or coll_map.get("all")
+
+                coll_id_1 = kitchen_id or all_id or ""
+                coll_id_2 = bathroom_id or all_id or ""
+                coll_id_3 = closet_id or all_id or ""
+                coll_id_4 = office_id or all_id or ""
+                coll_id_5 = all_id or coll_id_1 or ""
+
+                def coll_gid(cid):
+                    return f"gid://shopify/Collection/{cid}" if cid else ""
+
+                # 3. Read current templates/index.json
+                idx_resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json"
+                    "?asset[key]=templates/index.json",
+                    headers=headers
+                )
+                
+                tmpl = {}
+                if idx_resp.status_code == 200:
+                    try:
+                        tmpl = json.loads(idx_resp.json().get("asset", {}).get("value", "{}"))
+                    except Exception:
+                        tmpl = {}
+
+                sections = tmpl.get("sections", {})
+
+                # 4. Walk every section and update CoaiHome content
+                for sec_key, sec in sections.items():
+                    sec_type = sec.get("type", "")
+                    sett = sec.get("settings", {})
+
+                    # ─── Hero / image-banner / slideshow ───────────────────────
+                    if sec_type in ("image-banner", "slideshow", "banner", "hero"):
+                        sett["heading"]    = "Organize Every Corner of Your Home"
+                        sett["heading_size"] = "h1"
+                        sett["subheading"] = "Premium home organization products — kitchen, bathroom, closet & office"
+                        sett["button_label_1"]  = "Shop All Products"
+                        sett["button_link_1"]   = f"/collections/all-products"
+                        sett["button_label_2"]  = "Shop Kitchen"
+                        sett["button_link_2"]   = "/collections/kitchen"
+                        sett["image_overlay_opacity"] = 30
+                        # For slideshow blocks update first slide text
+                        for bk, bv in sec.get("blocks", {}).items():
+                            if bv.get("type") in ("slide", "image"):
+                                bv.setdefault("settings", {})
+                                bv["settings"]["heading"]    = "Organize Every Corner of Your Home"
+                                bv["settings"]["subheading"] = "Premium home organizers — kitchen, bath, closet & office"
+                                bv["settings"]["button_label"] = "Shop Now"
+                                bv["settings"]["button_link"]  = "/collections/all-products"
+                                break  # only first slide
+
+                    # ─── Rich text / announcement / intro ──────────────────────
+                    elif sec_type in ("rich-text", "announcement-bar"):
+                        sett["heading"] = "Welcome to CoaiHome"
+                        sett["content"] = "<p>Discover premium home organization solutions for every room in your home. Free shipping on orders over $50.</p>"
+
+                    # ─── Brand logos / partner logos ───────────────────────────
+                    elif sec_type in ("brand-logos", "logos", "featured-row"):
+                        sett["heading"] = "As Seen In"
+
+                    # ─── Collection list / featured categories ─────────────────
+                    elif sec_type in (
+                        "collection-list", "featured-collections",
+                        "collections-row", "collage", "collection-grid"
+                    ):
+                        sett["title"]   = "Shop by Category"
+                        sett["heading"] = "Shop by Category"
+                        # Update each collection block
+                        block_keys = list(sec.get("blocks", {}).keys())
+                        coll_ids = [coll_id_1, coll_id_2, coll_id_3, coll_id_4, coll_id_5]
+                        coll_handles = ["kitchen", "bathroom", "closet", "office", "all-products"]
+                        coll_labels  = ["Kitchen", "Bathroom", "Closet", "Office", "All Products"]
+                        for i, bk in enumerate(block_keys[:5]):
+                            bv = sec["blocks"][bk]
+                            bv.setdefault("settings", {})
+                            if coll_ids[i]:
+                                bv["settings"]["collection"] = coll_ids[i]
+                            bv["settings"]["heading"] = coll_labels[i]
+
+                    # ─── Featured collection (product grid) ────────────────────
+                    elif sec_type in ("featured-collection", "product-grid", "new-arrivals"):
+                        title = sett.get("title", sett.get("heading", ""))
+                        if "new" in title.lower() or "arrive" in title.lower():
+                            sett["title"]      = "New Arrivals"
+                            sett["heading"]    = "New Arrivals"
+                            sett["collection"] = coll_id_1 or ""
+                        else:
+                            sett["title"]      = "Bestsellers"
+                            sett["heading"]    = "Bestsellers"
+                            sett["collection"] = all_id or coll_id_1 or ""
+                        sett["products_to_show"] = 8
+                        sett["show_view_all"] = True
+
+                    # ─── Testimonials ──────────────────────────────────────────
+                    elif sec_type in ("testimonials", "reviews", "before-after"):
+                        sett["heading"] = "What Our Customers Say"
+                        for i, (bk, bv) in enumerate(sec.get("blocks", {}).items()):
+                            bv.setdefault("settings", {})
+                            testimonials = [
+                                ("Transformed my kitchen!", "The bamboo drawer organizer is beautiful and sturdy. Fits perfectly.", "Sarah M."),
+                                ("Finally, a tidy closet!", "The shelf dividers were so easy to install. My sweaters have never looked neater.", "James T."),
+                                ("Best purchase this year", "The stackable fridge bins made a huge difference. My fridge looks like a magazine photo!", "Priya K."),
+                                ("Amazing quality", "Bought the spice rack and the bathroom organizer. Both are premium quality. Will be back!", "Daniel R."),
+                            ]
+                            if i < len(testimonials):
+                                t = testimonials[i]
+                                bv["settings"]["heading"]  = t[0]
+                                bv["settings"]["text"]     = t[1]
+                                bv["settings"]["author"]   = t[2]
+                                bv["settings"]["rating"]   = 5
+
+                    # ─── Multicolumn / features / "You're set up for success" ──
+                    elif sec_type in ("multicolumn", "columns-with-image", "feature-row"):
+                        sett["title"]   = "Why Choose CoaiHome?"
+                        sett["heading"] = "Why Choose CoaiHome?"
+                        features = [
+                            ("🌿 Eco-Friendly Materials", "Our organizers are crafted from sustainable bamboo and BPA-free materials that are good for your home and the planet."),
+                            ("🚚 Free Shipping $50+",     "Free standard shipping on all orders over $50. Express options available at checkout."),
+                            ("↩️ 30-Day Returns",          "Not satisfied? Return any item within 30 days for a full refund — no questions asked."),
+                            ("⭐ Premium Quality",         "Every product is hand-selected for durability, functionality, and beautiful design."),
+                        ]
+                        for i, (bk, bv) in enumerate(sec.get("blocks", {}).items()):
+                            bv.setdefault("settings", {})
+                            if i < len(features):
+                                bv["settings"]["title"]       = features[i][0]
+                                bv["settings"]["text"]        = features[i][1]
+                                bv["settings"]["heading"]     = features[i][0]
+                                bv["settings"]["description"] = features[i][1]
+
+                    sec["settings"] = sett
+
+                tmpl["sections"] = sections
+
+                # 5. Write the modified template back
+                write_resp = await client.put(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
+                    headers=headers,
+                    json={"asset": {
+                        "key": "templates/index.json",
+                        "value": json.dumps(tmpl, indent=2)
+                    }}
+                )
+
+                if write_resp.status_code == 200:
+                    print("   ✅ templates/index.json updated — hero, collections, products, testimonials")
+                    
+                    # 6. Also update the announcement bar in sections/announcement-bar.liquid if it exists
+                    try:
+                        ann_resp = await client.get(
+                            f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json"
+                            "?asset[key]=sections/announcement-bar.json",
+                            headers=headers
+                        )
+                        if ann_resp.status_code == 200:
+                            ann_data = json.loads(ann_resp.json().get("asset", {}).get("value", "{}"))
+                            for sk, sv in ann_data.get("sections", {}).items():
+                                for bk, bv in sv.get("blocks", {}).items():
+                                    bv.setdefault("settings", {})
+                                    bv["settings"]["text"] = "🚚 FREE SHIPPING on orders over $50 | Use code ORGANIZE10 for 10% off your first order!"
+                            await client.put(
+                                f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
+                                headers=headers,
+                                json={"asset": {"key": "sections/announcement-bar.json", "value": json.dumps(ann_data, indent=2)}}
+                            )
+                    except Exception:
+                        pass
+
+                    return True
+                else:
+                    print(f"   ⚠️  templates/index.json write returned {write_resp.status_code}: {write_resp.text[:200]}")
+                    # Try alternate path
+                    write_resp2 = await client.put(
+                        f"https://{self.shop_domain}/admin/api/{self.api_version}/themes/{theme_id}/assets.json",
+                        headers=headers,
+                        json={"asset": {
+                            "key": "templates/index.liquid",
+                            "value": self._get_fallback_homepage_liquid()
+                        }}
+                    )
+                    return write_resp2.status_code == 200
+
+        except Exception as e:
+            print(f"   [!] Homepage template error: {e}")
+            return False
+
+    def _get_fallback_homepage_liquid(self) -> str:
+        """Fallback homepage in case the theme uses .liquid not .json templates"""
+        return """
+{% section 'announcement-bar' %}
+{% section 'header' %}
+
+<div style="background: #1a1a1a; color: white; padding: 100px 40px; text-align: center;">
+  <p style="font-size: 14px; letter-spacing: 3px; color: #4a9e4e; text-transform: uppercase; margin-bottom: 16px;">Welcome to CoaiHome</p>
+  <h1 style="font-size: 52px; font-weight: 700; margin-bottom: 24px; line-height: 1.1;">Organize Every Corner<br>of Your Home</h1>
+  <p style="font-size: 18px; color: #ccc; margin-bottom: 40px; max-width: 600px; margin-left: auto; margin-right: auto;">
+    Premium home organization products — kitchen, bathroom, closet & office
+  </p>
+  <a href="/collections/all-products"
+     style="display: inline-block; background: #2c5f2e; color: white; padding: 16px 40px;
+            border-radius: 6px; text-decoration: none; font-size: 16px; font-weight: 600;
+            letter-spacing: 1px;">
+    Shop All Products
+  </a>
+  <a href="/collections/kitchen"
+     style="display: inline-block; background: transparent; color: white; padding: 16px 40px;
+            border-radius: 6px; text-decoration: none; font-size: 16px; font-weight: 600;
+            letter-spacing: 1px; border: 2px solid #4a9e4e; margin-left: 16px;">
+    Kitchen Collection
+  </a>
+</div>
+
+<section style="padding: 60px 40px; max-width: 1200px; margin: 0 auto;">
+  <h2 style="text-align: center; font-size: 32px; margin-bottom: 40px; color: #1a1a1a;">Shop by Category</h2>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;">
+    {% assign cats = "kitchen,bathroom,closet,office" | split: "," %}
+    {% assign cat_names = "Kitchen,Bathroom,Closet,Office" | split: "," %}
+    {% for cat in cats %}
+      <a href="/collections/{{ cat }}" style="text-decoration: none;">
+        <div style="background: #f8f7f4; border-radius: 12px; padding: 32px 16px; text-align: center; transition: box-shadow 0.2s;">
+          <div style="font-size: 40px; margin-bottom: 12px;">
+            {%- if cat == 'kitchen' -%}🍳{%- elsif cat == 'bathroom' -%}🚿{%- elsif cat == 'closet' -%}👔{%- else -%}💼{%- endif -%}
+          </div>
+          <span style="font-size: 16px; font-weight: 600; color: #1a1a1a;">{{ cat_names[forloop.index0] }}</span>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section style="padding: 60px 40px; background: #f8f7f4;">
+  <h2 style="text-align: center; font-size: 32px; margin-bottom: 40px; color: #1a1a1a;">Bestsellers</h2>
+  {% assign collection = collections['all-products'] %}
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto;">
+    {% for product in collection.products limit: 8 %}
+      <a href="{{ product.url }}" style="text-decoration: none; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        {% if product.featured_image %}
+          <img src="{{ product.featured_image | img_url: '400x400' }}" alt="{{ product.title }}" style="width: 100%; aspect-ratio: 1; object-fit: cover;">
+        {% endif %}
+        <div style="padding: 16px;">
+          <h3 style="font-size: 14px; color: #1a1a1a; margin-bottom: 8px; font-weight: 600;">{{ product.title }}</h3>
+          <span style="font-size: 16px; color: #2c5f2e; font-weight: 700;">{{ product.price | money }}</span>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+
+
+{% section 'footer' %}
+"""
 
 
     async def _create_collections(self) -> List[Dict]:
