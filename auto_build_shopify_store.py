@@ -190,124 +190,157 @@ class AutomaticShopifyBuilder:
         print()
     
     async def _create_all_products(self) -> List[Dict]:
-        """Create products from DB in Shopify"""
-        from models.database import SessionLocal, Product, ProductStatus
+        """Research new products via CJ/AI and publish them directly to Shopify."""
         import httpx
+        from models.database import SessionLocal, Product, ProductStatus
         
-        db = SessionLocal()
-        # Get products that haven't been pushed to Shopify yet
-        products = db.query(Product).filter(Product.shopify_product_id == None).all()
-        
-        # If no new products, we need to get products WITHOUT shopify_product_id
-        # Don't use synced products as they already exist in Shopify!
-        if not products:
-            print("   No products without shopify_product_id found.")
-            print("   IMPORTANT: Sync operation populates shopify_product_id.")
-            print("   For a fresh store, you need products that don't exist in Shopify yet.")
-            print("   Either:")
-            print("   1. Run product research to add NEW products to the database")
-            print("   2. Or manually clear shopify_product_id from products you want to re-push")
-            db.close()
-            return []
-             
-        db.close()
-        
-        created = []
         if not self.access_token:
             print("   Cannot create products - no API access")
-            return created
-        
+            return []
+
         verify_ssl = os.getenv("SHOPIFY_SSL_VERIFY", "true").lower() == "true"
         headers = {
             "X-Shopify-Access-Token": self.access_token,
             "Content-Type": "application/json"
         }
         
-        async with httpx.AsyncClient(verify=verify_ssl) as client:
-            # Get Location ID for inventory
+        # Step 1: Source products from CJ Dropshipping or AI fallback
+        products_to_create = []
+        
+        try:
+            print("   Sourcing products from CJ Dropshipping API...")
+            from api_clients.cj_dropshipping_client import get_cj_client
+            cj = get_cj_client()
+            if not cj.shopify_mode:
+                result = await cj.search_products(keyword="home organizer", limit=15)
+                if result.get("result") and result.get("data", {}).get("list"):
+                    for p in result["data"]["list"][:15]:
+                        cost = float(p.get("sellPrice", 10.0) or 10.0)
+                        price = max(round(cost * 2.5, 2), 19.99)
+                        products_to_create.append({
+                            "title": p.get("productName", "Home Organizer"),
+                            "description": p.get("description") or f"Premium home organizer. Great for kitchens, bathrooms, and offices.",
+                            "cost": cost,
+                            "price": price,
+                            "image": p.get("imageUrl"),
+                            "sku": f"CJ-{p.get('pid', '')}"
+                        })
+                    print(f"   Found {len(products_to_create)} products from CJ API")
+        except Exception as e:
+            print(f"   CJ source attempt: {e}")
+        
+        # Fallback: Use AI-generated product catalog
+        if len(products_to_create) < 5:
+            print("   Using AI product catalog (CJ fallback)...")
+            products_to_create = [
+                {"title": "Bamboo Kitchen Drawer Organizer", "price": 34.99, "description": "Expandable bamboo drawer dividers. Keep your kitchen tools and utensils perfectly organized."},
+                {"title": "Stackable Fridge Storage Bins (Set of 4)", "price": 42.99, "description": "Crystal-clear, stackable bins designed for refrigerators. Maximize your fridge space instantly."},
+                {"title": "Rotating Makeup & Skincare Organizer", "price": 52.99, "description": "360° spinning tower with 20 storage sections. Keep your beauty products accessible and tidy."},
+                {"title": "Magnetic Spice Rack (12 Jars Included)", "price": 45.99, "description": "Wall-mounted magnetic spice storage system. Saves counter space and keeps spices visible."},
+                {"title": "Under-Sink Cabinet Organizer (2-Tier)", "price": 38.99, "description": "Adjustable 2-tier shelf maximizes under-sink space. Perfect for cleaning supplies."},
+                {"title": "Floating Wall Shelf Set (Set of 3)", "price": 56.99, "description": "Minimalist floating shelves for any room. Display photos, plants, and decor with style."},
+                {"title": "Closet Shelf Dividers (6 Pack)", "price": 24.99, "description": "Sturdy closet dividers for sweaters, jeans, and handbags. Install without tools."},
+                {"title": "Desktop File & Document Organizer", "price": 32.99, "description": "5-tier mesh file organizer for offices and home desks. Keep paperwork sorted and accessible."},
+                {"title": "Pantry Storage Container Set (10 Piece)", "price": 48.99, "description": "Airtight BPA-free containers for grains, pasta, and snacks. Includes labels and scoops."},
+                {"title": "Over-The-Door Shoe Organizer (30 Pockets)", "price": 29.99, "description": "Space-saving door organizer for shoes, accessories, and household items. Fits any door."},
+                {"title": "Cable Management Box & Cord Organizer", "price": 27.99, "description": "Hide power strips and tangled cables in this sleek organizer box. Clean, modern look."},
+                {"title": "Handbag & Purse Organizer (Hanging)", "price": 36.99, "description": "Transparent hanging organizer for 12 bags. Clear pockets keep purses visible and accessible."},
+                {"title": "Bathroom Counter Organizer (3-Tier)", "price": 31.99, "description": "3-tier rotating bathroom caddy for toiletries. Chrome finish looks premium in any bathroom."},
+                {"title": "Stackable Storage Drawers (3-Drawer)", "price": 54.99, "description": "Clear stackable drawers perfect for makeup, office, or craft supplies. Smooth gliding drawers."},
+                {"title": "Garage Wall Tool Organizer Panel", "price": 67.99, "description": "Pegboard panel system for garage tools. Includes 20 hooks and 5 baskets. Install in 30 min."},
+            ]
+        
+        # Step 2: Push each product to Shopify
+        created = []
+        db = SessionLocal()
+        
+        async with httpx.AsyncClient(verify=verify_ssl, timeout=30.0) as client:
+            # Get location ID for inventory
             loc_id = None
             try:
-                loc_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/locations.json"
-                loc_resp = await client.get(loc_url, headers=headers)
-                locations = loc_resp.json().get('locations', [])
+                loc_resp = await client.get(
+                    f"https://{self.shop_domain}/admin/api/{self.api_version}/locations.json",
+                    headers=headers
+                )
+                locations = loc_resp.json().get("locations", [])
                 if locations:
-                    loc_id = locations[0]['id']
+                    loc_id = locations[0]["id"]
             except Exception as e:
                 print(f"   [!] Could not get location for inventory: {e}")
             
-            for product in products:
+            for p in products_to_create:
                 try:
-                    # Prepare image data
                     images = []
-                    if product.ai_research_data and product.ai_research_data.get('main_image'):
-                        images.append({"src": product.ai_research_data.get('main_image')})
+                    if p.get("image"):
+                        images.append({"src": p["image"]})
                     
-                    # Prepare product data
-                    shopify_product = {
+                    shopify_payload = {
                         "product": {
-                            "title": product.title,
-                            "body_html": product.description or f"Premium {product.title} for your home.",
+                            "title": p["title"],
+                            "body_html": p.get("description", f"High-quality {p['title']} for your home."),
                             "vendor": "CoaiHome",
-                            "product_type": self._get_product_type(product.title),
-                            "tags": ["organizer", "home", "storage"],
+                            "product_type": self._get_product_type(p["title"]),
+                            "tags": "organizer, home, storage, coaihome",
                             "images": images,
-                            "variants": [
-                                {
-                                    "price": str(product.selling_price or 29.99),
-                                    "compare_at_price": str(round((product.selling_price or 29.99) * 1.5, 2)),
-                                    "inventory_management": "shopify",
-                                    "sku": product.sku or f"COAI-{product.id:03d}"
-                                }
-                            ],
+                            "variants": [{
+                                "price": str(p.get("price", 29.99)),
+                                "compare_at_price": str(round(p.get("price", 29.99) * 1.4, 2)),
+                                "inventory_management": "shopify",
+                                "sku": p.get("sku") or f"COAI-{len(created)+1:03d}"
+                            }],
                             "status": "active",
                             "published": True
                         }
                     }
                     
-                    # Create product
-                    url = f"https://{self.shop_domain}/admin/api/{self.api_version}/products.json"
-                    response = await client.post(url, headers=headers, json=shopify_product)
+                    resp = await client.post(
+                        f"https://{self.shop_domain}/admin/api/{self.api_version}/products.json",
+                        headers=headers, json=shopify_payload
+                    )
                     
-                    if response.status_code == 201:
-                        data = response.json()
+                    if resp.status_code == 201:
+                        data = resp.json()
                         p_id = data["product"]["id"]
                         v_id = data["product"]["variants"][0]["id"]
                         inv_item_id = data["product"]["variants"][0]["inventory_item_id"]
                         
-                        # Step 2: Set Inventory Level
+                        # Set inventory to 50 units
                         if loc_id:
-                            inv_url = f"https://{self.shop_domain}/admin/api/{self.api_version}/inventory_levels/set.json"
-                            inv_payload = {
-                                "location_id": loc_id,
-                                "inventory_item_id": inv_item_id,
-                                "available": 50
-                            }
-                            await client.post(inv_url, headers=headers, json=inv_payload)
+                            await client.post(
+                                f"https://{self.shop_domain}/admin/api/{self.api_version}/inventory_levels/set.json",
+                                headers=headers,
+                                json={"location_id": loc_id, "inventory_item_id": inv_item_id, "available": 50}
+                            )
                         
-                        # Update DB
-                        db = SessionLocal()
-                        db_p = db.query(Product).filter(Product.id == product.id).first()
-                        if db_p:
-                            db_p.shopify_product_id = str(p_id)
-                            db_p.shopify_variant_id = str(v_id)
-                            db_p.status = ProductStatus.ACTIVE
-                            db.commit()
-                        db.close()
+                        # Save to database
+                        db_p = Product(
+                            shopify_product_id=str(p_id),
+                            shopify_variant_id=str(v_id),
+                            store_id=1,
+                            title=p["title"],
+                            description=p.get("description", ""),
+                            selling_price=p.get("price", 29.99),
+                            cost_price=p.get("cost", 0),
+                            status=ProductStatus.ACTIVE,
+                            supplier_name="CJ Dropshipping" if p.get("sku", "").startswith("CJ-") else "CoaiHome"
+                        )
+                        db.add(db_p)
+                        db.commit()
                         
                         created.append(data["product"])
-                        print(f"   Created & Stocked: {product.title[:40]}...")
+                        print(f"   ✅ Published: {p['title'][:50]}")
                         
+                        await asyncio.sleep(0.5)  # Respect rate limits
                     else:
-                        print(f"   Failed: {product.title[:40]}... - Status {response.status_code}")
-                        print(f"   Error: {response.text[:200] if response.text else 'No response body'}")
-                    
-                    # Rate limiting: 1 second sleep between products
-                    await asyncio.sleep(1)
+                        err = resp.text[:150] if resp.text else "No response"
+                        print(f"   ❌ Failed: {p['title'][:40]} — {resp.status_code}: {err}")
                         
                 except Exception as e:
-                    print(f"   Error: {product.title[:40]}... - {e}")
+                    print(f"   Error creating {p.get('title', '?')[:40]}: {e}")
         
+        db.close()
         return created
+
 
     
     def _get_product_type(self, title: str) -> str:

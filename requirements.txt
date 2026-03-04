@@ -12,8 +12,8 @@ alembic>=1.13.1
 
 # Scheduling and background jobs
 apscheduler>=3.10.4
-celery>=5.3.6
-redis>=5.0.1
+schedule>=1.2.0
+aiohttp>=3.9.0
 
 # AI/LLM integration
 openai>=1.12.0
