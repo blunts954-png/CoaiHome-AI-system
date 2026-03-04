@@ -207,6 +207,10 @@ async def pricing_page(request: Request):
 
 # ============ Shopify OAuth ============ 
 
+from services.shopify_oauth_store import (
+    save_oauth_state, consume_oauth_state, upsert_installation, get_installation
+)
+
 @app.get("/auth/shopify/install")
 async def shopify_install(shop: str):
     """Start Shopify OAuth installation flow."""
@@ -220,15 +224,7 @@ async def shopify_install(shop: str):
         raise HTTPException(status_code=400, detail="Invalid shop domain. Use format: store-name.myshopify.com")
 
     state = secrets.token_urlsafe(24)
-
-    # Persist state to DB instead of in-memory dict
-    from models.database import SessionLocal, OAuthState
-    db = SessionLocal()
-    try:
-        db.add(OAuthState(state=state, shop_domain=shop))
-        db.commit()
-    finally:
-        db.close()
+    save_oauth_state(state, shop)
 
     callback_url = f"{settings.shopify.app_url.rstrip('/')}/auth/shopify/callback"
     query = urlencode(
@@ -260,23 +256,8 @@ async def shopify_callback(request: Request):
     if not _verify_shopify_hmac(request, settings.shopify.api_secret):
         raise HTTPException(status_code=400, detail="Invalid OAuth HMAC signature")
 
-    # Validate + consume state from DB (replaces in-memory pop)
-    from models.database import SessionLocal, OAuthState, ShopInstall
-    from datetime import timedelta
-    db = SessionLocal()
-    try:
-        db_state = db.query(OAuthState).filter(OAuthState.state == state).first()
-        if not db_state or db_state.shop_domain != shop:
-            raise HTTPException(status_code=400, detail="Invalid OAuth state")
-        # Expire states older than 15 minutes
-        if (datetime.utcnow() - db_state.created_at).total_seconds() > 900:
-            db.delete(db_state)
-            db.commit()
-            raise HTTPException(status_code=400, detail="OAuth state expired — restart installation")
-        db.delete(db_state)
-        db.commit()
-    finally:
-        db.close()
+    if not consume_oauth_state(state, shop):
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
 
     token_url = f"https://{shop}/admin/oauth/access_token"
     payload = {
@@ -285,45 +266,71 @@ async def shopify_callback(request: Request):
         "code": code
     }
 
-    async with httpx.AsyncClient(timeout=30.0, verify=settings.shopify.ssl_verify) as client:
+    async with httpx.AsyncClient(verify=settings.shopify.ssl_verify) as client:
         response = await client.post(token_url, json=payload)
-    if response.status_code >= 400:
-        raise HTTPException(status_code=502, detail=f"Token exchange failed: {response.text}")
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Failed to exchange code for token: {response.text}")
 
-    access_token = response.json().get("access_token", "")
-    if not access_token:
-        raise HTTPException(status_code=502, detail="Token exchange failed: missing access_token")
+        data = response.json()
+        access_token = data.get("access_token")
+        scope = data.get("scope", "")
 
-    # Persist token to DB — survives restarts and multi-worker deployments
-    db = SessionLocal()
-    try:
-        existing = db.query(ShopInstall).filter(ShopInstall.shop_domain == shop).first()
-        if existing:
-            existing.access_token = access_token
-        else:
-            db.add(ShopInstall(shop_domain=shop, access_token=access_token))
-        db.commit()
-    finally:
-        db.close()
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Missing access_token in Shopify response")
 
-    # Also warm the runtime settings so this request can immediately call Shopify APIs
-    settings.shopify.shop_url = shop
-    settings.shopify.access_token = access_token
+        upsert_installation(shop, access_token, scope)
 
-    return RedirectResponse(url=f"/dashboard?shop={shop}&installed=1", status_code=302)
+    dashboard_url = f"{settings.shopify.app_url.rstrip('/')}/dashboard?shop={shop}"
+    return RedirectResponse(url=dashboard_url, status_code=302)
 
 
 @app.get("/auth/shopify/status")
-async def shopify_install_status(shop: str):
-    """Check whether the DB has a persisted token for this shop."""
-    from models.database import SessionLocal, ShopInstall
-    shop = shop.strip().lower()
-    db = SessionLocal()
+async def shopify_status(shop: str):
+    """Check if a shop has already installed the app."""
+    install = get_installation(shop)
+    return {"shop": shop, "installed": install is not None}
+
+
+# ============ System / API ============
+
+@app.get("/api/system/health")
+async def health_check():
+    """Health check endpoint for Railway/deployment validation."""
+    health = {
+        "status": "healthy",
+        "checks": {
+            "database": "pass",
+            "shopify": "pass",
+            "cj_dropshipping": "pass",
+        },
+        "mode": "PROD" if not settings.system.debug else "DEBUG"
+    }
+
+    # 1. Database Check
+    from models.database import SessionLocal
     try:
-        row = db.query(ShopInstall).filter(ShopInstall.shop_domain == shop).first()
-        return {"shop": shop, "installed": row is not None}
-    finally:
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
         db.close()
+    except Exception as e:
+        health["status"] = "unhealthy"
+        health["checks"]["database"] = f"fail: {str(e)}"
+
+    # 2. Shopify Readiness
+    if not settings.shopify.api_key or not settings.shopify.api_secret:
+        health["checks"]["shopify"] = "warn: missing API credentials"
+    else:
+        # Check if at least one installation exists OR SHOPIFY_ACCESS_TOKEN is set
+        from services.shopify_oauth_store import get_any_installation
+        if not settings.shopify.access_token and not get_any_installation():
+            health["checks"]["shopify"] = "warn: no active installation found"
+
+    # 3. CJ Dropshipping Readiness
+    if not settings.cj.api_token:
+        health["checks"]["cj_dropshipping"] = "warn: missing CJ_API_TOKEN"
+
+    return health
 
 
 # ============ API Routes - Store Builder ============

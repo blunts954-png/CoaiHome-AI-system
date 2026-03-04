@@ -312,32 +312,27 @@ class CustomerSupportTicket(Base):
     resolved_at = Column(DateTime)
 
 
-# ─────────────────────────────────────────────────────────────
-# OAuth persistence tables (Phase B fix)
-# These replace the in-memory OAUTH_STATE_STORE / INSTALLED_SHOPS dicts.
-# Tokens survive restarts and are safe in multi-worker deployments.
-# ─────────────────────────────────────────────────────────────
-
-class ShopInstall(Base):
-    """Persisted Shopify OAuth tokens — one row per shop domain."""
-    __tablename__ = "shop_installs"
+class ShopifyOAuthState(Base):
+    """Persist OAuth state values to survive process restarts."""
+    __tablename__ = "shopify_oauth_states"
 
     id = Column(Integer, primary_key=True)
-    shop_domain = Column(String(255), unique=True, nullable=False, index=True)
-    access_token = Column(Text, nullable=False)   # Store encrypted in Phase C
-    scopes = Column(String(500))
-    installed_at = Column(DateTime, default=datetime.utcnow)
+    state = Column(String(255), unique=True, index=True, nullable=False)
+    shop = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    consumed_at = Column(DateTime)
+
+
+class ShopifyInstallation(Base):
+    """Persist installed Shopify shop tokens across deploys/workers."""
+    __tablename__ = "shopify_installations"
+
+    id = Column(Integer, primary_key=True)
+    shop = Column(String(255), unique=True, index=True, nullable=False)
+    access_token = Column(Text, nullable=False)
+    scope = Column(Text, default="")
+    installed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class OAuthState(Base):
-    """Short-lived OAuth CSRF state tokens (TTL: ~10 minutes)."""
-    __tablename__ = "oauth_states"
-
-    id = Column(Integer, primary_key=True)
-    state = Column(String(128), unique=True, nullable=False, index=True)
-    shop_domain = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # Create tables
